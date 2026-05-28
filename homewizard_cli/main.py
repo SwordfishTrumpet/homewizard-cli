@@ -11,7 +11,7 @@ from rich.console import Console
 
 from . import __version__
 from .client import P1Client
-from .config import load_config
+from .config import load_config, DEFAULT_HOST, DEFAULT_TIMEOUT, DEFAULT_FORMAT
 from .commands import (
     data,
     power,
@@ -83,11 +83,11 @@ def main_callback(
     # Priority: CLI arg > config file > hardcoded default
     cfg = load_config()
     if host is None:
-        host = cfg.host or "192.168.68.109"
+        host = cfg.host or DEFAULT_HOST
     if timeout is None:
-        timeout = cfg.timeout or 3.0
+        timeout = cfg.timeout or DEFAULT_TIMEOUT
     if format is None:
-        format = cfg.format or "auto"
+        format = cfg.format or DEFAULT_FORMAT
 
     if no_color:
         os.environ["NO_COLOR"] = "1"

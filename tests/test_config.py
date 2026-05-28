@@ -1,7 +1,13 @@
 import pytest
 from pathlib import Path
 from unittest.mock import patch
-from homewizard_cli.config import load_config, Config
+from homewizard_cli.config import (
+    load_config,
+    Config,
+    DEFAULT_HOST,
+    DEFAULT_TIMEOUT,
+    DEFAULT_FORMAT,
+)
 
 
 def test_config_defaults():
@@ -50,3 +56,9 @@ def test_config_invalid_toml():
         with patch("pathlib.Path.read_text", return_value="invalid toml {{"):
             config = load_config()
             assert config.host is None
+
+
+def test_config_defaults_constants():
+    assert DEFAULT_HOST == "192.168.68.109"
+    assert DEFAULT_TIMEOUT == 3.0
+    assert DEFAULT_FORMAT == "auto"
