@@ -64,9 +64,11 @@ def main_callback(
         is_eager=True,
         callback=_version_callback,
     ),
-    host: str = typer.Option("192.168.68.109", "--host", "-H", help="P1 meter IP"),
-    timeout: float = typer.Option(3.0, "--timeout", "-t", help="HTTP timeout"),
-    format: str = typer.Option("auto", "--format", "-f", help="Output format"),
+    host: Optional[str] = typer.Option(None, "--host", "-H", help="P1 meter IP"),
+    timeout: Optional[float] = typer.Option(
+        None, "--timeout", "-t", help="HTTP timeout"
+    ),
+    format: Optional[str] = typer.Option(None, "--format", "-f", help="Output format"),
     proxy: Optional[str] = typer.Option(None, "--proxy", help="HTTP proxy URL"),
     no_color: bool = typer.Option(False, "--no-color", help="Disable ANSI colors"),
     quiet: bool = typer.Option(
@@ -78,13 +80,14 @@ def main_callback(
     cache: bool = typer.Option(True, "--cache", "-c", help="Use metadata cache"),
 ):
     """HomeWizard P1 Meter CLI."""
+    # Priority: CLI arg > config file > hardcoded default
     cfg = load_config()
-    if cfg.host is not None:
-        host = cfg.host
-    if cfg.timeout is not None:
-        timeout = cfg.timeout
-    if cfg.format is not None:
-        format = cfg.format
+    if host is None:
+        host = cfg.host or "192.168.68.109"
+    if timeout is None:
+        timeout = cfg.timeout or 3.0
+    if format is None:
+        format = cfg.format or "auto"
 
     if no_color:
         os.environ["NO_COLOR"] = "1"
