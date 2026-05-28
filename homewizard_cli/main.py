@@ -11,6 +11,7 @@ from rich.console import Console
 
 from . import __version__
 from .client import P1Client
+from .config import load_config
 from .commands import (
     data,
     power,
@@ -77,6 +78,14 @@ def main_callback(
     cache: bool = typer.Option(True, "--cache", "-c", help="Use metadata cache"),
 ):
     """HomeWizard P1 Meter CLI."""
+    cfg = load_config()
+    if cfg.host is not None:
+        host = cfg.host
+    if cfg.timeout is not None:
+        timeout = cfg.timeout
+    if cfg.format is not None:
+        format = cfg.format
+
     if no_color:
         os.environ["NO_COLOR"] = "1"
     if ctx.invoked_subcommand is not None:
