@@ -64,6 +64,8 @@ async def _default_async(host, timeout, format):
 
 def _signal_handler(signum, frame):
     """Handle SIGINT for clean Ctrl+C exit."""
+    sys.stderr.write("\n")
+    sys.stderr.flush()
     sys.exit(0)
 
 
