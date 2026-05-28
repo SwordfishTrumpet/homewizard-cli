@@ -22,6 +22,7 @@ from .commands import (
     gas,
     quality,
     telegram,
+    discover,
 )
 from .errors import P1Error
 from .format import write_data, get_format
@@ -43,6 +44,7 @@ app.add_typer(energy.app, name="energy")
 app.add_typer(gas.app, name="gas")
 app.add_typer(quality.app, name="quality")
 app.add_typer(telegram.app, name="telegram")
+app.add_typer(discover.app, name="discover")
 
 
 def _version_callback(value: bool):
