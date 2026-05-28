@@ -10,6 +10,7 @@ from rich.console import Console
 from ..client import P1Client
 from ..models import DataResponse
 from ..format import Format, write_data, get_format
+from ..expr import evaluate_until
 
 
 def _filter_fields(data: DataResponse, fields_str: str) -> dict:
@@ -34,18 +35,24 @@ def data(
     format: str = typer.Option("auto", "--format", "-f", help="Output format"),
     host: str = typer.Option("192.168.68.109", "--host", "-H", help="P1 meter IP"),
     timeout: float = typer.Option(3.0, "--timeout", "-t", help="HTTP timeout"),
+    until: Optional[str] = typer.Option(
+        None, "--until", help="Exit when expression is true"
+    ),
 ):
     """Fetch and display full energy data."""
-    asyncio.run(_data_async(watch, fields, format, host, timeout))
+    asyncio.run(_data_async(watch, fields, format, host, timeout, until))
 
 
-async def _data_async(watch, fields, format, host, timeout):
+async def _data_async(watch, fields, format, host, timeout, until=None):
     console = Console()
     output_format = get_format(format, console.is_terminal)
 
     async with P1Client(host, timeout) as client:
         while True:
             data = await client.get_json("/api/v1/data", DataResponse)
+            if until and evaluate_until(data.model_dump(), until):
+                console.print(f"Condition met: {until}", style="green")
+                raise typer.Exit(code=10)
             filtered = _filter_fields(data, fields)
             if filtered:
                 console.print(json.dumps(filtered, indent=2, default=str))
