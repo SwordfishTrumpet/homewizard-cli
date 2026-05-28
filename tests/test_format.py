@@ -72,3 +72,88 @@ def test_write_minimal():
     assert "500.0 W" in result
     assert "239.9 V" in result
     assert "100.0 kWh in" in result
+
+
+def test_write_csv():
+    output = StringIO()
+    console = Console(file=output, force_terminal=False)
+    data = create_test_data()
+    from homewizard_cli.format.csv import write_csv
+
+    write_csv(data, console)
+    result = output.getvalue()
+    assert "active_power_w" in result
+
+
+def test_write_tsv():
+    output = StringIO()
+    console = Console(file=output, force_terminal=False)
+    data = create_test_data()
+    from homewizard_cli.format.tsv import write_tsv
+
+    write_tsv(data, console)
+    result = output.getvalue()
+    assert "active_power_w" in result
+
+
+def test_write_influx():
+    output = StringIO()
+    console = Console(file=output, force_terminal=False)
+    data = create_test_data()
+    from homewizard_cli.format.influx import write_influx
+
+    write_influx(data, console)
+    result = output.getvalue()
+    assert "p1_meter" in result
+    assert "active_power_w=500.0" in result
+
+
+def test_write_prometheus():
+    output = StringIO()
+    console = Console(file=output, force_terminal=False)
+    data = create_test_data()
+    from homewizard_cli.format.prometheus import write_prometheus
+
+    write_prometheus(data, console)
+    result = output.getvalue()
+    assert "p1_active_power_w" in result
+    assert "500.0" in result
+
+
+def test_write_env():
+    output = StringIO()
+    console = Console(file=output, force_terminal=False)
+    data = create_test_data()
+    from homewizard_cli.format.env import write_env
+
+    write_env(data, console)
+    result = output.getvalue()
+    assert "P1_ACTIVE_POWER_W" in result
+    assert "P1_METER_MODEL" in result
+
+
+def test_write_raw():
+    output = StringIO()
+    console = Console(file=output, force_terminal=False)
+    data = create_test_data()
+    from homewizard_cli.format.raw import write_raw
+
+    write_raw(data, console)
+    result = output.getvalue()
+    assert "ISKRA TEST" in result
+    assert "*kWh" in result
+
+
+def test_get_format_explicit_all():
+    for fmt in [
+        "json",
+        "table",
+        "csv",
+        "tsv",
+        "influx",
+        "prometheus",
+        "env",
+        "minimal",
+        "raw",
+    ]:
+        assert get_format(fmt) == Format(fmt)
