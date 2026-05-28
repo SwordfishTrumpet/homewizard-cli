@@ -3,6 +3,7 @@
 from rich.console import Console
 from rich.table import Table
 from homewizard_cli.models import DataResponse
+from ..util import format_p1_timestamp
 
 
 def write_table(data: DataResponse, console: Console):
@@ -31,5 +32,8 @@ def write_table(data: DataResponse, console: Console):
 
     if data.total_gas_m3 is not None:
         table.add_row("Gas", f"{data.total_gas_m3} m³")
+
+    if data.gas_timestamp is not None:
+        table.add_row("Gas Time", format_p1_timestamp(data.gas_timestamp))
 
     console.print(table)

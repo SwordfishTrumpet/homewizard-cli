@@ -2,6 +2,7 @@
 
 from rich.console import Console
 from homewizard_cli.models import DataResponse
+from ..util import format_p1_timestamp
 
 
 def write_minimal(data: DataResponse, console: Console):
