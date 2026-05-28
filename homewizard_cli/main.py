@@ -3,7 +3,6 @@
 import asyncio
 import signal
 import sys
-from typing import Optional
 
 import typer
 from rich.console import Console
@@ -12,7 +11,7 @@ from . import __version__
 from .client import P1Client
 from .commands import data, power, info, identify, system
 from .errors import P1Error
-from .format import Format, write_data, get_format
+from .format import write_data, get_format
 from .models import DataResponse
 
 app = typer.Typer(
@@ -85,6 +84,8 @@ def main():
         sys.exit(e.code)
     except SystemExit:
         raise
+    except KeyboardInterrupt:
+        sys.exit(0)
     except Exception as e:
         console = Console(stderr=True)
         console.print(f"Error: {e}", style="red")
