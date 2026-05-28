@@ -25,6 +25,7 @@ from .commands import (
     telegram,
     discover,
     export,
+    config as config_cmd,
 )
 from .errors import P1Error
 from .format import write_data, get_format
@@ -49,6 +50,7 @@ app.add_typer(quality.app, name="quality")
 app.add_typer(telegram.app, name="telegram")
 app.add_typer(discover.app, name="discover")
 app.add_typer(export.app, name="export")
+app.add_typer(config_cmd.app, name="config")
 
 
 def _version_callback(value: bool):
