@@ -8,6 +8,8 @@ from pydantic import BaseModel
 
 from .errors import HttpError, TimeoutError
 
+_MAX_BACKOFF = 8.0
+
 T = TypeVar("T", bound=BaseModel)
 
 
@@ -47,10 +49,15 @@ class P1Client:
             except httpx.TimeoutException:
                 last_error = TimeoutError(self.timeout)
                 if attempt < self._retries - 1:
-                    await asyncio.sleep(min(self._backoff_base * (2**attempt), 8.0))
+                    await asyncio.sleep(
+                        min(self._backoff_base * (2**attempt), _MAX_BACKOFF)
+                    )
+                    continue
             except httpx.HTTPStatusError as e:
                 if e.response.status_code >= 500 and attempt < self._retries - 1:
-                    await asyncio.sleep(min(self._backoff_base * (2**attempt), 8.0))
+                    await asyncio.sleep(
+                        min(self._backoff_base * (2**attempt), _MAX_BACKOFF)
+                    )
                     continue
                 raise HttpError(e.response.status_code, str(e.request.url))
         raise last_error
@@ -71,10 +78,15 @@ class P1Client:
             except httpx.TimeoutException:
                 last_error = TimeoutError(self.timeout)
                 if attempt < self._retries - 1:
-                    await asyncio.sleep(min(self._backoff_base * (2**attempt), 8.0))
+                    await asyncio.sleep(
+                        min(self._backoff_base * (2**attempt), _MAX_BACKOFF)
+                    )
+                    continue
             except httpx.HTTPStatusError as e:
                 if e.response.status_code >= 500 and attempt < self._retries - 1:
-                    await asyncio.sleep(min(self._backoff_base * (2**attempt), 8.0))
+                    await asyncio.sleep(
+                        min(self._backoff_base * (2**attempt), _MAX_BACKOFF)
+                    )
                     continue
                 raise HttpError(e.response.status_code, str(e.request.url))
         raise last_error
