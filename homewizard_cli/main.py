@@ -1,6 +1,7 @@
 """CLI entry point for homewizard-cli."""
 
 import asyncio
+import signal
 import sys
 from typing import Optional
 
@@ -61,14 +62,27 @@ async def _default_async(host, timeout, format):
         write_data(data, output_format, console)
 
 
+def _signal_handler(signum, frame):
+    """Handle SIGINT for clean Ctrl+C exit."""
+    sys.exit(0)
+
+
+def _setup_signal_handlers():
+    """Register signal handlers."""
+    signal.signal(signal.SIGINT, _signal_handler)
+
+
 def main():
     """Main entry point with error handling."""
+    _setup_signal_handlers()
     try:
         app()
     except P1Error as e:
         console = Console(stderr=True)
         console.print(str(e), style="red")
         sys.exit(e.code)
+    except SystemExit:
+        raise
     except Exception as e:
         console = Console(stderr=True)
         console.print(f"Error: {e}", style="red")
