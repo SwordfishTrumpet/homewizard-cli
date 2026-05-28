@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "homewizard-cli"
+version = "0.1.0"
+description = "High-performance CLI for HomeWizard P1 Meter"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "httpx>=0.27.0",
+    "typer>=0.12.0",
+    "pydantic>=2.0.0",
+    "rich>=13.0.0",
+    "zeroconf>=0.132.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+    "fastapi>=0.115.0",
+    "uvicorn>=0.30.0",
+]
+
+[project.scripts]
+homewizard-cli = "homewizard_cli.main:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["homewizard_cli*"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
