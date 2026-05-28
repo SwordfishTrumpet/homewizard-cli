@@ -12,6 +12,7 @@ from .minimal import write_minimal
 from .prometheus import write_prometheus
 from .raw import write_raw
 from .table import write_table
+from .template import write_template
 from .tsv import write_tsv
 
 
@@ -28,6 +29,7 @@ class Format(str, Enum):
     ENV = "env"
     MINIMAL = "minimal"
     RAW = "raw"
+    TEMPLATE = "template"
 
 
 FORMAT_WRITERS: Dict[Format, Callable] = {
@@ -40,6 +42,7 @@ FORMAT_WRITERS: Dict[Format, Callable] = {
     Format.ENV: write_env,
     Format.MINIMAL: write_minimal,
     Format.RAW: write_raw,
+    Format.TEMPLATE: write_template,
 }
 
 

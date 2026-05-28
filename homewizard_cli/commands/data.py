@@ -38,12 +38,17 @@ def data(
     until: Optional[str] = typer.Option(
         None, "--until", help="Exit when expression is true"
     ),
+    template: Optional[str] = typer.Option(
+        None,
+        "--template",
+        help="Custom output template (e.g. '{{.active_power_w}}W')",
+    ),
 ):
     """Fetch and display full energy data."""
-    asyncio.run(_data_async(watch, fields, format, host, timeout, until))
+    asyncio.run(_data_async(watch, fields, format, host, timeout, until, template))
 
 
-async def _data_async(watch, fields, format, host, timeout, until=None):
+async def _data_async(watch, fields, format, host, timeout, until=None, template=None):
     console = Console()
     if watch is not None and watch < 1.0:
         console.print(
@@ -66,6 +71,15 @@ async def _data_async(watch, fields, format, host, timeout, until=None):
                     await asyncio.sleep(watch)
                     continue
                 return
+
+            if template:
+                from ..format.template import write_template
+
+                write_template(data, console, template)
+                if watch is None:
+                    return
+                await asyncio.sleep(watch)
+                continue
 
             write_data(data, output_format, console)
 

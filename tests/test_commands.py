@@ -79,6 +79,12 @@ def test_data_until_help():
     assert "--until" in result.output
 
 
+def test_data_template_help():
+    result = runner.invoke(app, ["data", "--help"])
+    assert result.exit_code == 0
+    assert "--template" in result.output
+
+
 def test_data_fields_filter():
     """Test --fields option is accepted."""
     result = runner.invoke(app, ["data", "--help"])
