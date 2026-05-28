@@ -6,7 +6,7 @@ from typing import Any
 
 _EXPR_PATTERN = re.compile(
     r"^(?:abs\()?\s*([a-zA-Z_][a-zA-Z0-9_.]*)\s*\)?\s*"
-    r"(>==?|<=|==|!=|>|<)\s*"
+    r"(>=|<=|==|!=|>|<)\s*"
     r"(-?\d+(?:\.\d+)?)\s*$"
 )
 
