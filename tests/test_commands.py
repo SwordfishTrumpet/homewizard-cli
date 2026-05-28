@@ -59,3 +59,21 @@ def test_default_command():
         result = runner.invoke(app, [])
         assert result.exit_code == 0
         assert "TEST" in result.output
+
+
+def test_energy_help():
+    result = runner.invoke(app, ["energy", "--help"])
+    assert result.exit_code == 0
+    assert "energy" in result.output.lower()
+
+
+def test_gas_help():
+    result = runner.invoke(app, ["gas", "--help"])
+    assert result.exit_code == 0
+    assert "gas" in result.output.lower()
+
+
+def test_quality_help():
+    result = runner.invoke(app, ["quality", "--help"])
+    assert result.exit_code == 0
+    assert "quality" in result.output.lower()
