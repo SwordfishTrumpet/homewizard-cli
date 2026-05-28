@@ -10,7 +10,7 @@ from rich.console import Console
 
 from . import __version__
 from .client import P1Client
-from .commands import data, power, info, identify, system
+from .commands import data, power, info, identify, system, ping as ping_cmd
 from .errors import P1Error
 from .format import write_data, get_format
 from .models import DataResponse
@@ -26,6 +26,7 @@ app.add_typer(power.app, name="power")
 app.add_typer(info.app, name="info")
 app.add_typer(identify.app, name="identify")
 app.add_typer(system.app, name="system")
+app.add_typer(ping_cmd.app, name="ping")
 
 
 def _version_callback(value: bool):
