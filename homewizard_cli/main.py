@@ -21,6 +21,7 @@ from .commands import (
     energy,
     gas,
     quality,
+    telegram,
 )
 from .errors import P1Error
 from .format import write_data, get_format
@@ -41,6 +42,7 @@ app.add_typer(ping_cmd.app, name="ping")
 app.add_typer(energy.app, name="energy")
 app.add_typer(gas.app, name="gas")
 app.add_typer(quality.app, name="quality")
+app.add_typer(telegram.app, name="telegram")
 
 
 def _version_callback(value: bool):
