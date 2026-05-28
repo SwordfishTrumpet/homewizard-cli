@@ -27,6 +27,12 @@ def power(
 
 async def _power_async(watch, full, host, timeout):
     console = Console()
+    if watch is not None and watch < 1.0:
+        console.print(
+            f"Warning: Polling interval {watch}s is below recommended minimum (1.0s).\n"
+            "         Device may become unresponsive.",
+            style="yellow",
+        )
 
     async with P1Client(host, timeout) as client:
         while True:

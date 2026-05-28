@@ -45,6 +45,12 @@ def data(
 
 async def _data_async(watch, fields, format, host, timeout, until=None):
     console = Console()
+    if watch is not None and watch < 1.0:
+        console.print(
+            f"Warning: Polling interval {watch}s is below recommended minimum (1.0s).\n"
+            "         Device may become unresponsive.",
+            style="yellow",
+        )
     output_format = get_format(format, console.is_terminal)
 
     async with P1Client(host, timeout) as client:
