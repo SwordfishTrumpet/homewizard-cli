@@ -1,6 +1,7 @@
 """CLI entry point for homewizard-cli."""
 
 import asyncio
+import os
 import signal
 import sys
 from typing import Optional
@@ -62,8 +63,18 @@ def main_callback(
     timeout: float = typer.Option(3.0, "--timeout", "-t", help="HTTP timeout"),
     format: str = typer.Option("auto", "--format", "-f", help="Output format"),
     proxy: Optional[str] = typer.Option(None, "--proxy", help="HTTP proxy URL"),
+    no_color: bool = typer.Option(False, "--no-color", help="Disable ANSI colors"),
+    quiet: bool = typer.Option(
+        False, "--quiet", "-q", help="Suppress non-error output"
+    ),
+    verbose: bool = typer.Option(
+        False, "--verbose", "-v", help="Show HTTP request details"
+    ),
+    cache: bool = typer.Option(True, "--cache", "-c", help="Use metadata cache"),
 ):
     """HomeWizard P1 Meter CLI."""
+    if no_color:
+        os.environ["NO_COLOR"] = "1"
     if ctx.invoked_subcommand is not None:
         return
     asyncio.run(_default_async(host, timeout, format, proxy))

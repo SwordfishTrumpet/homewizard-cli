@@ -73,6 +73,13 @@ def test_gas_help():
     assert "gas" in result.output.lower()
 
 
+def test_data_fields_filter():
+    """Test --fields option is accepted."""
+    result = runner.invoke(app, ["data", "data", "--help"])
+    assert result.exit_code == 0
+    assert "--fields" in result.output
+
+
 def test_quality_help():
     result = runner.invoke(app, ["quality", "--help"])
     assert result.exit_code == 0

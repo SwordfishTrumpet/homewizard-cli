@@ -1,6 +1,7 @@
 """homewizard-cli data command."""
 
 import asyncio
+import json
 from typing import Optional
 
 import typer
@@ -9,6 +10,15 @@ from rich.console import Console
 from ..client import P1Client
 from ..models import DataResponse
 from ..format import Format, write_data, get_format
+
+
+def _filter_fields(data: DataResponse, fields_str: str) -> dict:
+    """Return only the requested fields from data."""
+    if not fields_str:
+        return None
+    wanted = set(f.strip() for f in fields_str.split(","))
+    return {k: v for k, v in data.model_dump().items() if k in wanted}
+
 
 app = typer.Typer()
 
@@ -36,6 +46,14 @@ async def _data_async(watch, fields, format, host, timeout):
     async with P1Client(host, timeout) as client:
         while True:
             data = await client.get_json("/api/v1/data", DataResponse)
+            filtered = _filter_fields(data, fields)
+            if filtered:
+                console.print(json.dumps(filtered, indent=2, default=str))
+                if watch is not None:
+                    await asyncio.sleep(watch)
+                    continue
+                return
+
             write_data(data, output_format, console)
 
             if watch is None:
