@@ -1,5 +1,3 @@
-import pytest
-from unittest.mock import AsyncMock, patch
 from typer.testing import CliRunner
 from homewizard_cli.main import app
 

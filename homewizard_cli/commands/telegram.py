@@ -29,11 +29,18 @@ async def _telegram_async(validate, obis, watch, host, timeout):
     console = Console()
     async with P1Client(host, timeout) as client:
         while True:
-            raw = await client.get("/api/v1/telegram")
+            try:
+                raw = await client.get("/api/v1/telegram")
+            except Exception as e:
+                console.print(f"Error fetching telegram: {e}", style="red")
+                if watch is None:
+                    raise
+                await asyncio.sleep(watch)
+                continue
 
             if obis:
                 for line in raw.splitlines():
-                    if line.startswith(obis):
+                    if line.split("(")[0] == obis:
                         console.print(line)
                         if watch is None:
                             return
@@ -54,14 +61,15 @@ async def _telegram_async(validate, obis, watch, host, timeout):
 
 def _validate_and_print(raw: str, console: Console):
     """Validate telegram CRC and print result."""
-    lines = raw.strip().splitlines()
+    stripped = raw.strip()
+    lines = stripped.splitlines()
     if not lines:
         console.print("Empty telegram", style="red")
         return
     last_line = lines[-1].strip()
     if last_line.startswith("!"):
         received_crc = last_line[1:]
-        crc_line = raw.strip().rsplit("!", 1)[0]
+        crc_line = stripped.rsplit("!", 1)[0]
         computed = _crc16(crc_line.encode("ascii"))
         computed_hex = f"{computed:04X}"
         valid = received_crc.upper() == computed_hex.upper()
@@ -74,7 +82,7 @@ def _validate_and_print(raw: str, console: Console):
             )
     else:
         console.print("No CRC found in telegram", style="yellow")
-    console.print(raw.strip())
+    console.print(stripped)
 
 
 def _crc16(data: bytes) -> int:
