@@ -5,7 +5,7 @@ import asyncio
 import typer
 from rich.console import Console
 
-from ..discovery import discover_host, discover_mdns, discover_arp, _get_cache
+from ..discovery import discover_host, _get_cache
 
 app = typer.Typer()
 
@@ -22,40 +22,18 @@ def discover(
 
 async def _discover_async(verbose, host, timeout):
     console = Console()
+    effective_host = host if host != "192.168.68.109" else None
 
     if verbose:
-        console.print("Trying explicit host ...")
-        if host:
-            from ..client import P1Client
+        console.print(f"Discovering P1 meter (timeout={timeout}s) ...")
 
-            try:
-                async with P1Client(host, timeout) as client:
-                    info = await client.get("/api/")
-                    import json
+    found = await discover_host(
+        explicit_host=effective_host,
+        use_cache=True,
+        timeout=timeout,
+    )
 
-                    data = json.loads(info)
-                    console.print(
-                        f"  {host} — {data.get('product_type', 'Unknown')} — {data.get('serial', 'N/A')}"
-                    )
-                    return
-            except Exception:
-                console.print(f"  {host} — not reachable")
+    if verbose and _get_cache():
+        console.print("  (cached from previous discovery)")
 
-        console.print("Trying mDNS _hwenergy._tcp.local ...")
-        mdns_host = await discover_mdns(timeout=2.0)
-        if mdns_host:
-            console.print(f"  found! {mdns_host}")
-        else:
-            console.print("  not found")
-
-        console.print("Trying ARP scan ...")
-        arp_host = await discover_arp(timeout=timeout)
-        if arp_host:
-            console.print(f"  found {arp_host}")
-        else:
-            console.print("  not found")
-    else:
-        found = await discover_host(
-            explicit_host=host if host != "192.168.68.109" else None, timeout=timeout
-        )
-        console.print(f"Found device at {found}")
+    console.print(f"Found device at {found}")
