@@ -25,10 +25,12 @@ def write_csv(data: DataResponse, console: Console):
         [
             datetime.now().isoformat(),
             data.active_power_w,
-            data.active_voltage_l1_v or "",
+            str(data.active_voltage_l1_v)
+            if data.active_voltage_l1_v is not None
+            else "",
             data.total_power_import_kwh,
             data.total_power_export_kwh,
-            data.total_gas_m3 or "",
+            str(data.total_gas_m3) if data.total_gas_m3 is not None else "",
         ]
     )
     console.print(output.getvalue().strip())
