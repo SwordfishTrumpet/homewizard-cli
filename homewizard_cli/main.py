@@ -32,6 +32,7 @@ from .models import DataResponse
 app = typer.Typer(
     name="homewizard-cli",
     help="HomeWizard P1 Meter CLI",
+    add_completion=True,
 )
 
 # Register subcommands
