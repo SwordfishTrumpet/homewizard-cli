@@ -7,6 +7,7 @@ import typer
 from rich.console import Console
 
 from ..client import P1Client
+from ..obis import lookup_obis
 
 app = typer.Typer()
 
@@ -20,13 +21,25 @@ def telegram(
     watch: Optional[float] = typer.Option(None, "--watch", "-w", help="Poll interval"),
     host: str = typer.Option("192.168.68.109", "--host", "-H", help="P1 meter IP"),
     timeout: float = typer.Option(3.0, "--timeout", "-t", help="HTTP timeout"),
+    explain: Optional[str] = typer.Option(
+        None, "--explain", help="Explain an OBIS code"
+    ),
 ):
     """Access raw DSMR telegram from the P1 meter."""
-    asyncio.run(_telegram_async(validate, obis, watch, host, timeout))
+    asyncio.run(_telegram_async(validate, obis, explain, watch, host, timeout))
 
 
-async def _telegram_async(validate, obis, watch, host, timeout):
+async def _telegram_async(validate, obis, explain, watch, host, timeout):
     console = Console()
+
+    if explain:
+        desc = lookup_obis(explain)
+        if desc:
+            console.print(f"{explain} — {desc}")
+        else:
+            console.print(f"Unknown OBIS code: {explain}", style="yellow")
+        return
+
     async with P1Client(host, timeout) as client:
         while True:
             try:
