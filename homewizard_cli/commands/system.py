@@ -12,7 +12,7 @@ from ..models import SystemResponse
 app = typer.Typer()
 
 
-@app.command()
+@app.callback(invoke_without_command=True)
 def system(
     cloud: Optional[bool] = typer.Option(None, "--cloud", help="Set cloud_enabled"),
     cloud_toggle: bool = typer.Option(

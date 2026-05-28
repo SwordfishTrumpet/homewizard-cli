@@ -12,7 +12,7 @@ from ..models import DataResponse
 app = typer.Typer()
 
 
-@app.command()
+@app.callback(invoke_without_command=True)
 def info(
     host: str = typer.Option("192.168.68.109", "--host", "-H", help="P1 meter IP"),
     timeout: float = typer.Option(3.0, "--timeout", "-t", help="HTTP timeout"),

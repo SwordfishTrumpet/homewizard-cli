@@ -11,7 +11,7 @@ from ..models import DataResponse
 app = typer.Typer()
 
 
-@app.command()
+@app.callback(invoke_without_command=True)
 def energy(
     tariffs: bool = typer.Option(False, "--tariffs", help="Show tariff breakdown"),
     host: str = typer.Option("192.168.68.109", "--host", "-H", help="P1 meter IP"),

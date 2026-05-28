@@ -13,7 +13,7 @@ from ..util import format_p1_timestamp
 app = typer.Typer()
 
 
-@app.command()
+@app.callback(invoke_without_command=True)
 def gas(
     full: bool = typer.Option(False, "--full", help="Show all gas details"),
     watch: Optional[float] = typer.Option(None, "--watch", "-w", help="Poll interval"),

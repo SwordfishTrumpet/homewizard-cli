@@ -12,7 +12,7 @@ from ..models import DataResponse
 app = typer.Typer()
 
 
-@app.command()
+@app.callback(invoke_without_command=True)
 def quality(
     watch: Optional[float] = typer.Option(None, "--watch", "-w", help="Poll interval"),
     alert: bool = typer.Option(False, "--alert", help="Only print when counts change"),

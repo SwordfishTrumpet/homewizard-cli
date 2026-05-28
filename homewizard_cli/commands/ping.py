@@ -11,7 +11,7 @@ from ..client import P1Client
 app = typer.Typer()
 
 
-@app.command()
+@app.callback(invoke_without_command=True)
 def ping(
     quiet: bool = typer.Option(
         False, "--quiet", "-q", help="Only exit code, no output"

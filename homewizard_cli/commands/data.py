@@ -23,7 +23,7 @@ def _filter_fields(data: DataResponse, fields_str: str) -> dict:
 app = typer.Typer()
 
 
-@app.command()
+@app.callback(invoke_without_command=True)
 def data(
     watch: Optional[float] = typer.Option(
         None, "--watch", "-w", help="Poll interval in seconds"

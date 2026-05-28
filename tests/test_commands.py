@@ -75,7 +75,7 @@ def test_gas_help():
 
 def test_data_fields_filter():
     """Test --fields option is accepted."""
-    result = runner.invoke(app, ["data", "data", "--help"])
+    result = runner.invoke(app, ["data", "--help"])
     assert result.exit_code == 0
     assert "--fields" in result.output
 

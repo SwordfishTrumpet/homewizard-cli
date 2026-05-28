@@ -12,7 +12,7 @@ from ..models import DataResponse
 app = typer.Typer()
 
 
-@app.command()
+@app.callback(invoke_without_command=True)
 def power(
     watch: Optional[float] = typer.Option(
         None, "--watch", "-w", help="Poll interval in seconds"

@@ -10,7 +10,7 @@ from ..client import P1Client
 app = typer.Typer()
 
 
-@app.command()
+@app.callback(invoke_without_command=True)
 def identify(
     count: int = typer.Option(1, "--count", "-c", help="Number of blinks"),
     host: str = typer.Option("192.168.68.109", "--host", "-H", help="P1 meter IP"),
