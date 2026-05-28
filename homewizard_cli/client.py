@@ -1,7 +1,8 @@
 """Async HTTP client for P1 Meter API."""
 
+import os
 import httpx
-from typing import Type, TypeVar
+from typing import Optional, Type, TypeVar
 from pydantic import BaseModel
 
 from .errors import HttpError, TimeoutError
@@ -9,17 +10,28 @@ from .errors import HttpError, TimeoutError
 T = TypeVar("T", bound=BaseModel)
 
 
+def _get_proxy_url(explicit_proxy: Optional[str] = None) -> Optional[str]:
+    """Get proxy URL from explicit arg or env vars."""
+    if explicit_proxy:
+        return explicit_proxy
+    return os.environ.get("HTTP_PROXY") or os.environ.get("HTTPS_PROXY")
+
+
 class P1Client:
     """Async HTTP client for HomeWizard P1 Meter."""
 
-    def __init__(self, host: str, timeout: float = 3.0):
+    def __init__(self, host: str, timeout: float = 3.0, proxy: Optional[str] = None):
         self.host = host
         self.timeout = timeout
-        self._client = httpx.AsyncClient(
-            base_url=f"http://{host}",
-            timeout=httpx.Timeout(timeout),
-            limits=httpx.Limits(keepalive_expiry=30.0),
-        )
+        proxy_url = _get_proxy_url(proxy)
+        client_kwargs = {
+            "base_url": f"http://{host}",
+            "timeout": httpx.Timeout(timeout),
+            "limits": httpx.Limits(keepalive_expiry=30.0),
+        }
+        if proxy_url:
+            client_kwargs["proxies"] = {"http://": proxy_url, "https://": proxy_url}
+        self._client = httpx.AsyncClient(**client_kwargs)
 
     async def get(self, path: str) -> str:
         """GET request returning raw text."""

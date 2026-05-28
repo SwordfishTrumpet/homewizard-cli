@@ -1,3 +1,4 @@
+import os
 import pytest
 import httpx
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -44,3 +45,21 @@ async def test_client_timeout():
             with pytest.raises(TimeoutError) as exc_info:
                 await client.get("/api/v1/data")
             assert exc_info.value.code == 4
+
+
+@pytest.mark.asyncio
+async def test_client_proxy_from_env():
+    """Test proxy URL is read from env var."""
+    with patch.dict("os.environ", {"HTTP_PROXY": "http://proxy:8080"}):
+        from homewizard_cli.client import _get_proxy_url
+
+        assert _get_proxy_url() == "http://proxy:8080"
+
+
+@pytest.mark.asyncio
+async def test_client_explicit_proxy_overrides_env():
+    """Test explicit --proxy overrides env var."""
+    with patch.dict("os.environ", {"HTTP_PROXY": "http://proxy:8080"}):
+        from homewizard_cli.client import _get_proxy_url
+
+        assert _get_proxy_url("http://custom:3128") == "http://custom:3128"

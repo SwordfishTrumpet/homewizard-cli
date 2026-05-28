@@ -3,6 +3,7 @@
 import asyncio
 import signal
 import sys
+from typing import Optional
 
 import typer
 from rich.console import Console
@@ -46,17 +47,18 @@ def main_callback(
     host: str = typer.Option("192.168.68.109", "--host", "-H", help="P1 meter IP"),
     timeout: float = typer.Option(3.0, "--timeout", "-t", help="HTTP timeout"),
     format: str = typer.Option("auto", "--format", "-f", help="Output format"),
+    proxy: Optional[str] = typer.Option(None, "--proxy", help="HTTP proxy URL"),
 ):
     """HomeWizard P1 Meter CLI."""
     if ctx.invoked_subcommand is not None:
         return
-    asyncio.run(_default_async(host, timeout, format))
+    asyncio.run(_default_async(host, timeout, format, proxy))
 
 
-async def _default_async(host, timeout, format):
+async def _default_async(host, timeout, format, proxy=None):
     console = Console()
     output_format = get_format(format, console.is_terminal)
-    async with P1Client(host, timeout) as client:
+    async with P1Client(host, timeout, proxy=proxy) as client:
         data = await client.get_json("/api/v1/data", DataResponse)
         write_data(data, output_format, console)
 
