@@ -1,5 +1,6 @@
 """Async HTTP client for P1 Meter API."""
 
+import asyncio
 import os
 import httpx
 from typing import Optional, Type, TypeVar
@@ -32,17 +33,27 @@ class P1Client:
         if proxy_url:
             client_kwargs["proxies"] = {"http://": proxy_url, "https://": proxy_url}
         self._client = httpx.AsyncClient(**client_kwargs)
+        self._retries = 3
+        self._backoff_base = 1.0
 
     async def get(self, path: str) -> str:
         """GET request returning raw text."""
-        try:
-            resp = await self._client.get(path)
-            resp.raise_for_status()
-            return resp.text
-        except httpx.TimeoutException:
-            raise TimeoutError(self.timeout)
-        except httpx.HTTPStatusError as e:
-            raise HttpError(e.response.status_code, str(e.request.url))
+        last_error = None
+        for attempt in range(self._retries):
+            try:
+                resp = await self._client.get(path)
+                resp.raise_for_status()
+                return resp.text
+            except httpx.TimeoutException:
+                last_error = TimeoutError(self.timeout)
+                if attempt < self._retries - 1:
+                    await asyncio.sleep(min(self._backoff_base * (2**attempt), 8.0))
+            except httpx.HTTPStatusError as e:
+                if e.response.status_code >= 500 and attempt < self._retries - 1:
+                    await asyncio.sleep(min(self._backoff_base * (2**attempt), 8.0))
+                    continue
+                raise HttpError(e.response.status_code, str(e.request.url))
+        raise last_error
 
     async def get_json(self, path: str, model: Type[T]) -> T:
         """GET request returning parsed Pydantic model."""
@@ -51,14 +62,22 @@ class P1Client:
 
     async def put_json(self, path: str, data: dict) -> dict:
         """PUT request with JSON body."""
-        try:
-            resp = await self._client.put(path, json=data)
-            resp.raise_for_status()
-            return resp.json()
-        except httpx.TimeoutException:
-            raise TimeoutError(self.timeout)
-        except httpx.HTTPStatusError as e:
-            raise HttpError(e.response.status_code, str(e.request.url))
+        last_error = None
+        for attempt in range(self._retries):
+            try:
+                resp = await self._client.put(path, json=data)
+                resp.raise_for_status()
+                return resp.json()
+            except httpx.TimeoutException:
+                last_error = TimeoutError(self.timeout)
+                if attempt < self._retries - 1:
+                    await asyncio.sleep(min(self._backoff_base * (2**attempt), 8.0))
+            except httpx.HTTPStatusError as e:
+                if e.response.status_code >= 500 and attempt < self._retries - 1:
+                    await asyncio.sleep(min(self._backoff_base * (2**attempt), 8.0))
+                    continue
+                raise HttpError(e.response.status_code, str(e.request.url))
+        raise last_error
 
     async def close(self):
         """Close the HTTP client."""

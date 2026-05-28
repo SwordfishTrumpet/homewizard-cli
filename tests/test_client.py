@@ -85,3 +85,86 @@ async def test_client_proxy_not_set():
         from homewizard_cli.client import _get_proxy_url
 
         assert _get_proxy_url() is None
+
+
+@pytest.mark.asyncio
+async def test_client_retry_on_timeout():
+    """Test retry with backoff on timeout."""
+    call_count = 0
+
+    async def side_effect(*args, **kwargs):
+        nonlocal call_count
+        call_count += 1
+        if call_count < 3:
+            raise httpx.TimeoutException("Timeout")
+        resp = MagicMock()
+        resp.text = '{"key": "value"}'
+        resp.status_code = 200
+        resp.raise_for_status = MagicMock()
+        return resp
+
+    with patch("httpx.AsyncClient.get", side_effect=side_effect):
+        client = P1Client("192.168.1.1", timeout=1.0)
+        client._retries = 3
+        result = await client.get("/api/v1/data")
+        assert call_count == 3
+        assert result == '{"key": "value"}'
+        await client.close()
+
+
+@pytest.mark.asyncio
+async def test_client_retry_exhausted():
+    """Test that retries eventually raise."""
+    with patch("httpx.AsyncClient.get", side_effect=httpx.TimeoutException("Timeout")):
+        client = P1Client("192.168.1.1", timeout=0.1)
+        client._retries = 2
+        with pytest.raises(TimeoutError):
+            await client.get("/api/v1/data")
+        await client.close()
+
+
+@pytest.mark.asyncio
+async def test_client_retry_on_5xx():
+    """Test retry on HTTP 5xx errors."""
+    call_count = 0
+
+    async def side_effect(*args, **kwargs):
+        nonlocal call_count
+        call_count += 1
+        if call_count < 3:
+            resp = MagicMock()
+            resp.status_code = 502
+            resp.raise_for_status.side_effect = httpx.HTTPStatusError(
+                "502", request=MagicMock(), response=resp
+            )
+            raise httpx.HTTPStatusError("502", request=MagicMock(), response=resp)
+        resp = MagicMock()
+        resp.text = '{"key": "value"}'
+        resp.status_code = 200
+        resp.raise_for_status = MagicMock()
+        return resp
+
+    with patch("httpx.AsyncClient.get", side_effect=side_effect):
+        client = P1Client("192.168.1.1")
+        client._retries = 3
+        result = await client.get("/api/v1/data")
+        assert call_count == 3
+        assert result == '{"key": "value"}'
+        await client.close()
+
+
+@pytest.mark.asyncio
+async def test_client_no_retry_on_4xx():
+    """Test that 4xx errors are not retried."""
+    mock_response = MagicMock()
+    mock_response.status_code = 404
+    mock_response.raise_for_status.side_effect = httpx.HTTPStatusError(
+        "404", request=MagicMock(), response=mock_response
+    )
+
+    with patch("httpx.AsyncClient.get", return_value=mock_response):
+        client = P1Client("192.168.1.1")
+        client._retries = 3
+        with pytest.raises(HttpError):
+            await client.get("/api/v1/data")
+        await client.close()
