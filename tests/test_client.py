@@ -63,3 +63,25 @@ async def test_client_explicit_proxy_overrides_env():
         from homewizard_cli.client import _get_proxy_url
 
         assert _get_proxy_url("http://custom:3128") == "http://custom:3128"
+
+
+@pytest.mark.asyncio
+async def test_client_proxy_passed_to_httpx():
+    """Test that proxy config reaches httpx.AsyncClient."""
+    with patch("httpx.AsyncClient") as mock:
+        client = P1Client("192.168.1.1", proxy="http://p:8080")
+        client._client.aclose = AsyncMock()
+        await client.close()
+    assert mock.call_args[1]["proxies"] == {
+        "http://": "http://p:8080",
+        "https://": "http://p:8080",
+    }
+
+
+@pytest.mark.asyncio
+async def test_client_proxy_not_set():
+    """Test no proxy when neither env var nor explicit arg."""
+    with patch.dict("os.environ", clear=True):
+        from homewizard_cli.client import _get_proxy_url
+
+        assert _get_proxy_url() is None
