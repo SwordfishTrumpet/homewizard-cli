@@ -1,8 +1,6 @@
 # homewizard-cli
 
 <p align="center">
-  <img src="https://img.shields.io/pypi/pyversions/homewizard-cli?label=Python&logo=python&logoColor=white" alt="Python 3.11+">
-  <img src="https://img.shields.io/pypi/v/homewizard-cli?label=PyPI&logo=pypi&logoColor=white" alt="PyPI">
   <img src="https://img.shields.io/github/license/SwordfishTrumpet/homewizard-cli?label=License" alt="MIT License">
   <img src="https://img.shields.io/badge/code%20style-ruff-blueviolet" alt="Ruff">
   <img src="https://img.shields.io/badge/types-pydantic%20v2-aa4488" alt="Pydantic v2">
