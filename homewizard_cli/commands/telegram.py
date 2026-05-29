@@ -27,6 +27,9 @@ def telegram(
     host: str | None = typer.Option(None, "--host", "-H", help="P1 meter IP"),
     timeout: float = typer.Option(3.0, "--timeout", "-t", help="HTTP timeout"),
     explain: str | None = typer.Option(None, "--explain", help="Explain an OBIS code"),
+    named: bool = typer.Option(
+        False, "--named", help="Use human-readable OBIS names in JSON output"
+    ),
     proxy: str | None = typer.Option(None, "--proxy", help="HTTP proxy URL"),
     api_version: str = typer.Option(
         "v2", "--api-version", help=f"API version ({'|'.join(API_VERSIONS)})"
@@ -42,6 +45,7 @@ def telegram(
             validate,
             obis,
             explain,
+            named,
             watch,
             format,
             rate,
@@ -59,6 +63,7 @@ async def _telegram_async(
     validate: bool,
     obis: str | None,
     explain: str | None,
+    named: bool,
     watch: float | None,
     format: str,
     rate: bool,
@@ -142,6 +147,10 @@ async def _telegram_async(
                 _validate_and_print(raw, console)
             elif output_json:
                 parsed = _parse_telegram(raw)
+                if named:
+                    parsed["obis"] = {
+                        lookup_obis(k) or k: v for k, v in parsed["obis"].items()
+                    }
                 output = json.dumps(parsed, indent=2, default=str)
                 if rate:
                     output += f"\nRate: {rate_per_min:.1f} telegrams/minute"

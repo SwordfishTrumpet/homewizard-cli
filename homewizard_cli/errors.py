@@ -54,3 +54,8 @@ class CrcMismatchError(P1Error):
 class WriteError(P1Error):
     def __init__(self, message: str):
         super().__init__(message, code=7)
+
+
+class UntilConditionMet(P1Error):
+    def __init__(self, message: str):
+        super().__init__(message, code=10)

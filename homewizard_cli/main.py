@@ -152,8 +152,22 @@ async def _default_async(
         write_data(data, output_format, console)
 
 
+def _signal_handler(signum, frame):
+    """Handle SIGINT and SIGTERM for graceful shutdown."""
+    sys.exit(0)
+
+
+def _setup_signal_handlers():
+    """Register signal handlers for graceful shutdown."""
+    import signal
+
+    signal.signal(signal.SIGINT, _signal_handler)
+    signal.signal(signal.SIGTERM, _signal_handler)
+
+
 def main():
     """Main entry point with error handling."""
+    _setup_signal_handlers()
     try:
         app()
     except P1Error as e:
