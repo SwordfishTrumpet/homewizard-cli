@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "homewizard-cli"
-version = "0.1.0"
-description = "High-performance CLI for HomeWizard P1 Meter"
+version = "0.2.0"
+description = "CLI tool for HomeWizard P1 meter — read energy data, monitor power/gas/water usage, export to MQTT/InfluxDB/Prometheus, serve a REST API, view a real-time dashboard, and manage your HomeWizard devices"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
