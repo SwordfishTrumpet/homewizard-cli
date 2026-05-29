@@ -7,3 +7,11 @@ AGENTS.md
 TODO.md
 TRD.md
 docs/
+tests/
+uv.lock
+.ruff_cache/
+.mypy_cache/
+dist/
+.coverage
+htmlcov/
+.env
