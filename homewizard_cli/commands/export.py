@@ -272,8 +272,8 @@ async def _export_async(
         if pid_file_path.exists():
             try:
                 old_pid = int(pid_file_path.read_text().strip())
-            except (ValueError, OSError):
-                pass
+            except (ValueError, OSError) as e:
+                console.print(f"Error reading PID file {pid_file}: {e}", style="yellow")
             else:
                 if _pid_is_alive(old_pid):
                     console.print(
@@ -322,8 +322,11 @@ async def _export_async(
                 console.print(f"  Rotation error: {e}", style="red")
                 try:
                     file_handle = open(file_path, "a")
-                except OSError:
-                    pass
+                except OSError as reopen_err:
+                    console.print(
+                        f"Failed to reopen {file_path} after rotation: {reopen_err}",
+                        style="red",
+                    )
         last_rotation_key = current_key
 
     def _safe_write(buf: str) -> bool:
@@ -413,10 +416,10 @@ async def _export_async(
                         raise typer.Exit(code=10)
 
                 if tracker is not None:
-                    # Always write on first iteration (no previous data)
                     is_first = not tracker._previous
                     changed = tracker.changed(data.model_dump())
                     if not is_first and not changed:
+                        tracker.update(data.model_dump())
                         if watch is None:
                             break
                         try:
@@ -424,6 +427,7 @@ async def _export_async(
                         except asyncio.TimeoutError:
                             pass
                         continue
+                    tracker.update(data.model_dump())
 
                 if delta and delta_tracker is not None:
                     changes = delta_tracker.update(data.model_dump())
@@ -528,5 +532,7 @@ async def _export_async(
         if pid_file_path is not None:
             try:
                 pid_file_path.unlink()
-            except OSError:
-                pass
+            except OSError as e:
+                console.print(
+                    f"Error removing PID file {pid_file}: {e}", style="yellow"
+                )

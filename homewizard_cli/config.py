@@ -8,7 +8,7 @@ from pathlib import Path
 CONFIG_DIR = Path.home() / ".config" / "homewizard-cli"
 CONFIG_FILE = CONFIG_DIR / "config.toml"
 
-DEFAULT_HOST = "192.168.68.109"
+DEFAULT_HOST = ""
 DEFAULT_TIMEOUT = 3.0
 DEFAULT_FORMAT = "auto"
 VALID_FORMATS = {

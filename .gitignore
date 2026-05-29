@@ -16,4 +16,3 @@ htmlcov/
 .env
 .github/workflows/ci.yml
 scripts/
-tests/

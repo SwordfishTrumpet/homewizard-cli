@@ -50,8 +50,8 @@ class DataResponse(BaseModel):
     active_current_l3_a: float | None = None
     active_frequency_hz: float | None = None
     active_power_average_w: float | None = None
-    montly_power_peak_w: float | None = None
-    montly_power_peak_timestamp: int | None = None
+    monthly_power_peak_w: float | None = None
+    monthly_power_peak_timestamp: int | None = None
 
     # Power Quality
     voltage_sag_l1_count: int | None = None

@@ -18,4 +18,10 @@ class DeltaTracker:
         return changes
 
     def changed(self, data: dict) -> bool:
-        return bool(self.update(data))
+        for k, v in data.items():
+            if isinstance(v, (int, float)):
+                if self.fields is None or k in self.fields:
+                    prev = self._previous.get(k)
+                    if prev is not None and v != prev:
+                        return True
+        return False

@@ -83,8 +83,8 @@ def write_raw(data: DataResponse, console: Console):
         lines.append(f"0-1:24.2.1(0000000000W)({data.total_gas_m3:06.3f}*m3)")
     if data.active_power_average_w is not None:
         lines.append(f"1-0:15.7.0({data.active_power_average_w:06.3f}*kW)")
-    if data.montly_power_peak_w is not None:
-        lines.append(f"1-0:16.7.0({data.montly_power_peak_w:06.3f}*kW)")
+    if data.monthly_power_peak_w is not None:
+        lines.append(f"1-0:16.7.0({data.monthly_power_peak_w:06.3f}*kW)")
     if data.text_message:
         lines.append(f"0-0:96.13.0({data.text_message})")
     lines.append("!")

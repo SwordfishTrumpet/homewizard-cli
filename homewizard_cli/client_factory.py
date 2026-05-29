@@ -91,8 +91,8 @@ def convert_v2_measurement(m: MeasurementV2) -> DataResponse:
         any_power_fail_count=m.any_power_fail_count,
         long_power_fail_count=m.long_power_fail_count,
         active_power_average_w=m.average_power_15m_w,
-        montly_power_peak_w=m.monthly_power_peak_w,
-        montly_power_peak_timestamp=_iso_to_compact_timestamp(
+        monthly_power_peak_w=m.monthly_power_peak_w,
+        monthly_power_peak_timestamp=_iso_to_compact_timestamp(
             m.monthly_power_peak_timestamp
         ),
         total_gas_m3=m.total_gas_m3,
