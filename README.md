@@ -256,7 +256,18 @@ homewizard-cli data --ws --watch 10
 homewizard-cli data --ws --until "active_power_w > 5000"
 ```
 
-**Options:** `--watch`, `--fields`, `--template`, `--delta`, `--query`, `--until`, `--ws`, `--format`, `--proxy`
+**Options:**
+
+| Option         | Description                                                 |
+|----------------|-------------------------------------------------------------|
+| `--watch`      | Poll interval in seconds (default: 2s)                      |
+| `--fields`     | Comma-separated field names to display (e.g. `active_power_w,total_gas_m3`) |
+| `--template`   | Go-style output template (e.g. `{{.active_power_w}}W`)      |
+| `--delta`      | Show only changed values with colored deltas (requires `--watch`) |
+| `--query`      | JSONPath expression to filter data (e.g. `$.active_power_w`) |
+| `--until`      | Exit when expression is true (e.g. `active_power_w > 1000`) |
+| `--ws`         | Use WebSocket push instead of HTTP polling (v2 only)        |
+| `--format`     | Output format: `table`, `json`, `csv`, `tsv`, `influx`, `prometheus`, `env`, `minimal`, `raw` |
 
 ### `power`
 
@@ -314,7 +325,16 @@ homewizard-cli power --watch --until "abs(active_power_w) > 2000"
 homewizard-cli power --format csv
 ```
 
-**Options:** `--watch`, `--full`, `--color`, `--sparkline`, `--until`, `--format`, `--proxy`
+**Options:**
+
+| Option       | Description                                                 |
+|--------------|-------------------------------------------------------------|
+| `--watch`    | Poll interval in seconds (default: 2s)                      |
+| `--full`     | Show import/export breakdown, voltage, and current          |
+| `--color`    | Color output: green when exporting, red when importing      |
+| `--sparkline`| Unicode sparkline of last 20 power readings (▁▂▃▄▅▆▇█)      |
+| `--until`    | Exit when expression is true (e.g. `abs(active_power_w) > 2000`) |
+| `--format`   | Output format: `table`, `json`, `csv`, `tsv`                |
 
 ### `energy`
 
@@ -345,7 +365,11 @@ T1 (peak):     Import: 8,234.57  Export: 1,234.57
 T2 (off-peak): Import: 4,111.11  Export: 1,111.11
 ```
 
-**Options:** `--tariffs`, `--proxy`
+**Options:**
+
+| Option      | Description                                              |
+|-------------|----------------------------------------------------------|
+| `--tariffs` | Show T1–T4 tariff breakdown (T3/T4 only if supported)   |
 
 ### `gas`
 
@@ -376,7 +400,12 @@ Meter ID:  G1H2I3J4K5L6
 homewizard-cli gas --watch 10
 ```
 
-**Options:** `--full`, `--watch`, `--proxy`
+**Options:**
+
+| Option    | Description                                              |
+|-----------|----------------------------------------------------------|
+| `--full`  | Show total m³, last read timestamp, and meter ID        |
+| `--watch` | Poll interval in seconds (default: 2s)                   |
 
 ### `quality`
 
@@ -416,7 +445,13 @@ Power Failure Events:
   2026-05-28 14:23:00 — Short outage (2 s)
 ```
 
-**Options:** `--watch`, `--alert`, `--events`, `--proxy`
+**Options:**
+
+| Option     | Description                                                    |
+|------------|----------------------------------------------------------------|
+| `--watch`  | Poll interval in seconds (default: 2s)                         |
+| `--alert`  | Only print when any sag/swell counter changes (requires `--watch`) |
+| `--events` | Show power failure event log (timestamps and durations)        |
 
 ### `telegram`
 
@@ -527,7 +562,17 @@ homewizard-cli telegram --explain 1-0:1.8.1
 homewizard-cli telegram --watch --rate
 ```
 
-**Options:** `--validate`, `--obis`, `--explain`, `--named`, `--watch`, `--rate`, `--format`, `--proxy`
+**Options:**
+
+| Option       | Description                                                   |
+|--------------|---------------------------------------------------------------|
+| `--validate` | Validate the CRC checksum of the telegram                      |
+| `--obis`     | Extract a specific OBIS code value (e.g. `1-0:1.8.1`)         |
+| `--explain`  | Show human-readable description of an OBIS code               |
+| `--named`    | Replace OBIS codes with human-readable names in JSON output   |
+| `--watch`    | Poll interval in seconds (default: 2s)                         |
+| `--rate`     | Count and display telegrams per minute (requires `--watch`)   |
+| `--format`   | Output format: `json`, `table`, `csv`, `tsv`, `raw`           |
 
 ### `info`
 
@@ -563,7 +608,7 @@ DSMR:        5.0
 Cloud:       enabled
 ```
 
-**Options:** `--proxy`
+**Options:** *(none — uses global options for host, timeout, etc.)*
 
 ### `system`
 
@@ -603,7 +648,13 @@ homewizard-cli system --api-version v1
 homewizard-cli system --api-version v1 --cloud false
 ```
 
-**Options:** `--cloud`, `--cloud-toggle`, `--led-brightness`, `--proxy`
+**Options:**
+
+| Option            | Description                                                           |
+|-------------------|-----------------------------------------------------------------------|
+| `--cloud`         | Set `cloud_enabled` to `true` or `false` (e.g. `--cloud false`)       |
+| `--cloud-toggle`  | Toggle the current `cloud_enabled` value                               |
+| `--led-brightness`| Set LED brightness (0–100, v2 only)                                   |
 
 ### `identify`
 
@@ -625,7 +676,11 @@ homewizard-cli identify --count 5
 LED blink triggered on P1 Meter (5x)
 ```
 
-**Options:** `--count`, `--proxy`
+**Options:**
+
+| Option    | Description                          |
+|-----------|--------------------------------------|
+| `--count` | Number of LED blinks (default: 1)    |
 
 ### `ping`
 
@@ -644,7 +699,11 @@ P1 Meter at 192.168.1.100 — OK (42ms)
 homewizard-cli ping --quiet
 ```
 
-**Options:** `--quiet`, `--proxy`
+**Options:**
+
+| Option    | Description                                           |
+|-----------|-------------------------------------------------------|
+| `--quiet` | Exit code only — no output (0=success, non-zero=fail) |
 
 ### `discover`
 
@@ -688,7 +747,13 @@ homewizard-cli discover --all
 
 Discovery attempts `_homewizard._tcp.local.` (v2 devices) first, then falls back to `_hwenergy._tcp.local.` (v1 legacy), and finally scans `/proc/net/arp` for known TP-Link MAC prefixes (`5c:62:8b`, `3c:61:05`).
 
-**Options:** `--save`, `--all`, `--verbose`
+**Options:**
+
+| Option      | Description                                                   |
+|-------------|---------------------------------------------------------------|
+| `--save`    | Persist discovered host to cache (~/.config/homewizard-cli/host) |
+| `--all`     | List every HomeWizard device on the network                   |
+| `--verbose` | Show mDNS query progress and cache status                     |
 
 ### `dashboard`
 
@@ -721,7 +786,11 @@ homewizard-cli dashboard --watch 5
 └────────────────────────────────────────────────────────┘
 ```
 
-**Options:** `--watch`, `--proxy`
+**Options:**
+
+| Option    | Description                               |
+|-----------|-------------------------------------------|
+| `--watch` | Update interval in seconds (default: 2s)  |
 
 ### `export`
 
@@ -763,7 +832,23 @@ homewizard-cli export --watch 10 --pid-file /var/run/hw-export.pid
 homewizard-cli export --format json --watch 2 | curl -X POST http://influxdb:8086/write?db=energy --data-binary @-
 ```
 
-**Options:** `--watch`, `--format`, `--file`, `--rotate` (`daily`|`hourly`), `--broker`, `--topic`, `--qos`, `--skip-unchanged`, `--fields`, `--delta`, `--until`, `--metrics-port`, `--pid-file`, `--proxy`
+**Options:**
+
+| Option            | Description                                                         |
+|-------------------|---------------------------------------------------------------------|
+| `--watch`         | Poll interval in seconds (required for continuous export)            |
+| `--format`        | Output format: `influx`, `json`, `csv`, `tsv`, `mqtt`, `prometheus`, `env`, `minimal`, `raw` |
+| `--file`          | Write output to a file instead of stdout                            |
+| `--rotate`        | Rotate log files: `daily` (YYYY-MM-DD) or `hourly` (YYYY-MM-DDTHH)  |
+| `--broker`        | MQTT broker URL (required for `--format mqtt`)                      |
+| `--topic`         | MQTT publish topic (required for `--format mqtt`)                   |
+| `--qos`           | MQTT QoS level (0, 1, or 2)                                         |
+| `--skip-unchanged`| Skip writing when data hasn't changed since last poll                |
+| `--fields`        | Comma-separated field names to export (e.g. `active_power_w`)       |
+| `--delta`         | Show only changed fields with colored deltas (requires `--watch`)   |
+| `--until`         | Exit when expression is true (e.g. `total_power_import_kwh > 10000`)|
+| `--metrics-port`  | Enable Prometheus metrics HTTP endpoint on this port (0=disabled)   |
+| `--pid-file`      | Write PID to file for process management (removed on exit)          |
 
 #### Export Features
 
@@ -808,7 +893,13 @@ curl http://localhost:8000/api/v1/data      # v1
 - Supports both API v1 (HTTP) and v2 (HTTPS + Bearer auth)
 - Validates device connectivity before starting
 
-**Options:** `--bind`, `--port`, `--cache`, `--proxy`
+**Options:**
+
+| Option    | Description                                           |
+|-----------|-------------------------------------------------------|
+| `--bind`  | Bind address (default: `0.0.0.0`)                     |
+| `--port`  | Listen port (default: `8000`)                         |
+| `--cache` | Cache proxied responses for N seconds (default: 0, disabled) |
 
 ### `reboot`
 
@@ -996,6 +1087,34 @@ v2 measurement data is automatically converted to v1 format (`DataResponse`) so 
 4. Caches the result to `~/.config/homewizard-cli/host` with a 24-hour TTL
 
 The `--save` flag persists the discovered host to the cache. The `--all` flag returns every detected HomeWizard device on the network in a Rich table.
+
+---
+
+## Watch Mode (`--watch`)
+
+Many commands support `--watch` (or `--watch N`), which turns a one-shot read into a continuous polling loop. Instead of fetching data once and exiting, the command polls the P1 meter every N seconds and prints the result each time.
+
+```bash
+homewizard-cli data --watch       # poll at default interval (2s)
+homewizard-cli data --watch 5     # poll every 5 seconds
+homewizard-cli power --watch 1    # poll every 1 second
+homewizard-cli gas --watch 10     # poll every 10 seconds
+```
+
+Press Ctrl+C to stop. Polling intervals below 1.0s print a yellow warning since the device may become unresponsive.
+
+Watch mode combines with other flags for powerful use cases:
+
+| Combo                         | Effect                                                          |
+|-------------------------------|-----------------------------------------------------------------|
+| `--watch --delta`             | Only show fields whose values changed since last poll           |
+| `--watch --sparkline`         | Sliding 20-sample sparkline trend chart (▁▂▃▄▅▆▇█)              |
+| `--watch --until`             | Automatically exit when a condition is met                      |
+| `--watch --alert`             | (quality) Only print when sag/swell counters change             |
+| `--watch --rate`              | (telegram) Count and display telegrams per minute               |
+| `--watch --skip-unchanged`    | (export) Skip writing to file/MQTT when data is unchanged       |
+
+Commands supporting `--watch`: `data`, `power`, `gas`, `quality`, `telegram`, `dashboard`, `export`.
 
 ---
 
