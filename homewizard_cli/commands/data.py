@@ -7,6 +7,7 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
+from ..alerting import AlertDispatcher
 from ..client_factory import resolve_client, convert_v2_measurement, API_VERSIONS
 from ..models import DataResponse
 from ..models.v2 import MeasurementV2
@@ -66,6 +67,21 @@ def data(
         "--ws",
         help="Use WebSocket for real-time push (v2 only, requires websockets)",
     ),
+    alert_webhook: str | None = typer.Option(
+        None,
+        "--alert-webhook",
+        help="Webhook URL to POST when --until condition fires",
+    ),
+    alert_cmd: str | None = typer.Option(
+        None,
+        "--alert-cmd",
+        help="Shell command to run when --until condition fires",
+    ),
+    alert_cooldown: float = typer.Option(
+        0.0,
+        "--alert-cooldown",
+        help="Minimum seconds between alert dispatches",
+    ),
 ):
     """Fetch and display full energy data."""
     asyncio.run(
@@ -84,6 +100,9 @@ def data(
             token=token,
             no_verify=no_verify,
             ws=ws,
+            alert_webhook=alert_webhook,
+            alert_cmd=alert_cmd,
+            alert_cooldown=alert_cooldown,
         )
     )
 
@@ -91,7 +110,6 @@ def data(
 def _handle_data_output(
     d: DataResponse,
     *,
-    until: str | None,
     query: str | None,
     delta: bool,
     tracker: DeltaTracker | None,
@@ -101,10 +119,6 @@ def _handle_data_output(
     console: Console,
 ) -> bool:
     """Process and display a single data response. Returns True if caller should stop."""
-    if until and evaluate_until(d.model_dump(), until):
-        console.print(f"Condition met: {until}", style="green")
-        raise typer.Exit(code=10)
-
     if query:
         result = query_jsonpath(d.model_dump(), query)
         console.print(json.dumps(result, indent=2, default=str))
@@ -163,6 +177,9 @@ async def _data_async(
     token: str | None = None,
     no_verify: bool = False,
     ws: bool = False,
+    alert_webhook: str | None = None,
+    alert_cmd: str | None = None,
+    alert_cooldown: float = 0.0,
 ):
     console = Console()
     host = resolve_host(host)
@@ -178,6 +195,14 @@ async def _data_async(
             style="yellow",
         )
     output_format = get_format(format, console.is_terminal)
+
+    webhook_urls = [alert_webhook] if alert_webhook else None
+    alert_commands = [alert_cmd] if alert_cmd else None
+    dispatcher = AlertDispatcher(
+        webhook_urls=webhook_urls,
+        commands=alert_commands,
+        cooldown_seconds=alert_cooldown,
+    )
 
     tracker: DeltaTracker | None = None
     if delta:
@@ -198,9 +223,17 @@ async def _data_async(
                     continue
                 m = MeasurementV2(**msg)
                 d = convert_v2_measurement(m)
+
+                if until and evaluate_until(d.model_dump(), until):
+                    console.print(f"Condition met: {until}", style="green")
+                    if dispatcher.configured:
+                        await dispatcher.dispatch(until, d.model_dump())
+                    if watch is None or not dispatcher.configured:
+                        raise typer.Exit(code=10)
+                    continue
+
                 _handle_data_output(
                     d,
-                    until=until,
                     query=query,
                     delta=delta,
                     tracker=tracker,
@@ -229,9 +262,17 @@ async def _data_async(
             else:
                 d = await c.get_json("/api/v1/data", DataResponse)
 
+            if until and evaluate_until(d.model_dump(), until):
+                console.print(f"Condition met: {until}", style="green")
+                if dispatcher.configured:
+                    await dispatcher.dispatch(until, d.model_dump())
+                if watch is None or not dispatcher.configured:
+                    raise typer.Exit(code=10)
+                await asyncio.sleep(watch)
+                continue
+
             should_stop = _handle_data_output(
                 d,
-                until=until,
                 query=query,
                 delta=delta,
                 tracker=tracker,
@@ -241,7 +282,6 @@ async def _data_async(
                 console=console,
             )
             if should_stop:
-                # query / delta / fields / template are one-shot operations
                 if watch is None:
                     return
                 await asyncio.sleep(watch)

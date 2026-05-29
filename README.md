@@ -258,16 +258,19 @@ homewizard-cli data --ws --until "active_power_w > 5000"
 
 **Options:**
 
-| Option         | Description                                                 |
-|----------------|-------------------------------------------------------------|
-| `--watch`      | Poll interval in seconds (default: 2s)                      |
-| `--fields`     | Comma-separated field names to display (e.g. `active_power_w,total_gas_m3`) |
-| `--template`   | Go-style output template (e.g. `{{.active_power_w}}W`)      |
-| `--delta`      | Show only changed values with colored deltas (requires `--watch`) |
-| `--query`      | JSONPath expression to filter data (e.g. `$.active_power_w`) |
-| `--until`      | Exit when expression is true (e.g. `active_power_w > 1000`) |
-| `--ws`         | Use WebSocket push instead of HTTP polling (v2 only)        |
-| `--format`     | Output format: `table`, `json`, `csv`, `tsv`, `influx`, `prometheus`, `env`, `minimal`, `raw` |
+| Option              | Description                                                 |
+|---------------------|-------------------------------------------------------------|
+| `--watch`           | Poll interval in seconds (default: 2s)                      |
+| `--fields`          | Comma-separated field names to display (e.g. `active_power_w,total_gas_m3`) |
+| `--template`        | Go-style output template (e.g. `{{.active_power_w}}W`)      |
+| `--delta`           | Show only changed values with colored deltas (requires `--watch`) |
+| `--query`           | JSONPath expression to filter data (e.g. `$.active_power_w`) |
+| `--until`           | Exit when expression is true (e.g. `active_power_w > 1000`) |
+| `--ws`              | Use WebSocket push instead of HTTP polling (v2 only)        |
+| `--alert-webhook`   | Webhook URL to POST when `--until` condition fires          |
+| `--alert-cmd`       | Shell command to run when `--until` condition fires         |
+| `--alert-cooldown`  | Minimum seconds between alert dispatches (default: 0)       |
+| `--format`          | Output format: `table`, `json`, `csv`, `tsv`, `influx`, `prometheus`, `env`, `minimal`, `raw` |
 
 ### `power`
 
@@ -327,14 +330,17 @@ homewizard-cli power --format csv
 
 **Options:**
 
-| Option       | Description                                                 |
-|--------------|-------------------------------------------------------------|
-| `--watch`    | Poll interval in seconds (default: 2s)                      |
-| `--full`     | Show import/export breakdown, voltage, and current          |
-| `--color`    | Color output: green when exporting, red when importing      |
-| `--sparkline`| Unicode sparkline of last 20 power readings (▁▂▃▄▅▆▇█)      |
-| `--until`    | Exit when expression is true (e.g. `abs(active_power_w) > 2000`) |
-| `--format`   | Output format: `table`, `json`, `csv`, `tsv`                |
+| Option              | Description                                                 |
+|---------------------|-------------------------------------------------------------|
+| `--watch`           | Poll interval in seconds (default: 2s)                      |
+| `--full`            | Show import/export breakdown, voltage, and current          |
+| `--color`           | Color output: green when exporting, red when importing      |
+| `--sparkline`       | Unicode sparkline of last 20 power readings (▁▂▃▄▅▆▇█)      |
+| `--until`           | Exit when expression is true (e.g. `abs(active_power_w) > 2000`) |
+| `--alert-webhook`   | Webhook URL to POST when `--until` condition fires          |
+| `--alert-cmd`       | Shell command to run when `--until` condition fires         |
+| `--alert-cooldown`  | Minimum seconds between alert dispatches (default: 0)       |
+| `--format`          | Output format: `table`, `json`, `csv`, `tsv`                |
 
 ### `energy`
 
@@ -847,6 +853,9 @@ homewizard-cli export --format json --watch 2 | curl -X POST http://influxdb:808
 | `--fields`        | Comma-separated field names to export (e.g. `active_power_w`)       |
 | `--delta`         | Show only changed fields with colored deltas (requires `--watch`)   |
 | `--until`         | Exit when expression is true (e.g. `total_power_import_kwh > 10000`)|
+| `--alert-webhook`  | Webhook URL to POST when `--until` condition fires          |
+| `--alert-cmd`      | Shell command to run when `--until` condition fires         |
+| `--alert-cooldown` | Minimum seconds between alert dispatches (default: 0)       |
 | `--metrics-port`  | Enable Prometheus metrics HTTP endpoint on this port (0=disabled)   |
 | `--pid-file`      | Write PID to file for process management (removed on exit)          |
 
@@ -1110,7 +1119,9 @@ Watch mode combines with other flags for powerful use cases:
 | `--watch --delta`             | Only show fields whose values changed since last poll           |
 | `--watch --sparkline`         | Sliding 20-sample sparkline trend chart (▁▂▃▄▅▆▇█)              |
 | `--watch --until`             | Automatically exit when a condition is met                      |
-| `--watch --alert`             | (quality) Only print when sag/swell counters change             |
+| `--until --alert-webhook`    | Fire webhook on condition, keep watching in `--watch` mode      |
+| `--until --alert-cmd`        | Run shell command on condition, keep watching in `--watch` mode |
+| `--watch --alert`            | (quality) Only print when sag/swell counters change             |
 | `--watch --rate`              | (telegram) Count and display telegrams per minute               |
 | `--watch --skip-unchanged`    | (export) Skip writing to file/MQTT when data is unchanged       |
 
@@ -1146,6 +1157,67 @@ Exit watch/data loops when a numeric field crosses a threshold:
 ```
 
 Supports operators `>`, `<`, `>=`, `<=`, `==`, `!=`, and wrapping with `abs()`. Exits with code 10 when the condition is met.
+
+---
+
+## Alert Actions (`--alert-webhook`, `--alert-cmd`, `--alert-cooldown`)
+
+When a `--until` condition fires, alert actions deliver notifications via webhooks, shell commands, or both. Available on `data`, `power`, and `export` commands.
+
+```bash
+# POST JSON payload to a webhook when solar export drops below threshold
+homewizard-cli data --watch 5 \
+  --until "active_power_w < -2000" \
+  --alert-webhook https://hooks.slack.com/services/T00/B00/xxx
+
+# Run a shell command when a condition fires
+homewizard-cli power --watch 2 \
+  --until "active_power_w > 5000" \
+  --alert-cmd "mosquitto_pub -t home/alerts -m 'High power usage: $HW_CONDITION'"
+
+# Prevent alert storms with cooldown (minimum seconds between dispatches)
+homewizard-cli data --watch 10 \
+  --until "active_power_w > 5000" \
+  --alert-webhook https://ntfy.sh/my-topic \
+  --alert-cooldown 300
+
+# Chain multiple alert channels simultaneously
+homewizard-cli data --watch 2 \
+  --until "voltage_sag_l1_count != 0" \
+  --alert-webhook https://hooks.slack.com/xxx \
+  --alert-cmd "echo ALERT | systemd-cat -t homewizard" \
+  --alert-cooldown 60
+```
+
+**Behavior:**
+
+- **Without alerts:** `--until` exits with code 10 (unchanged behavior).
+- **With alert actions in watch mode:** After dispatching alerts, polling continues instead of exiting. The same condition will re-trigger on the next poll (subject to cooldown).
+- **With alert actions in one-shot mode (no `--watch`):** Alerts are dispatched, then the command exits with code 10.
+
+**Webhook payload format:**
+
+```json
+{
+  "timestamp": "2026-05-29T12:00:00+00:00",
+  "condition": "active_power_w > 5000",
+  "data": {
+    "active_power_w": 5123.4,
+    "total_power_import_kwh": 12345.6,
+    ...
+  }
+}
+```
+
+**Shell command environment:** The triggering command receives:
+- `HW_CONDITION` — The expression that fired (e.g. `"active_power_w > 5000"`)
+- `HW_DATA` — JSON string of the full `DataResponse` dictionary
+
+| Option              | Description                                                       |
+|---------------------|-------------------------------------------------------------------|
+| `--alert-webhook`   | URL to POST a JSON payload to when the condition fires             |
+| `--alert-cmd`       | Shell command to execute when the condition fires                  |
+| `--alert-cooldown`  | Minimum seconds between successive alert dispatches (default: 0)   |
 
 ---
 
