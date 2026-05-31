@@ -5,10 +5,10 @@ import asyncio
 import typer
 from rich.console import Console
 
-from ..client_factory import resolve_client, convert_v2_measurement, API_VERSIONS
-from ..config import resolve_host, load_config
-from ..models import DataResponse
-from ..models.v2 import MeasurementV2
+from ..client_factory import API_VERSIONS, resolve_client
+from ..config import load_config, resolve_host
+from ..models import Measurement
+from ..storage import _setup_store
 from ..util import format_p1_timestamp
 
 app = typer.Typer()
@@ -28,6 +28,9 @@ def gas(
     no_verify: bool = typer.Option(
         False, "--no-verify", help="Disable SSL cert verification (v2 only)"
     ),
+    db: str | None = typer.Option(
+        None, "--db", help="SQLite database path for historical storage"
+    ),
 ):
     """Display gas consumption."""
     asyncio.run(
@@ -40,6 +43,7 @@ def gas(
             api_version=api_version,
             token=token,
             no_verify=no_verify,
+            db=db,
         )
     )
 
@@ -53,6 +57,7 @@ async def _gas_async(
     api_version: str = "v2",
     token: str | None = None,
     no_verify: bool = False,
+    db: str | None = None,
 ):
     console = Console()
     host = resolve_host(host)
@@ -71,12 +76,14 @@ async def _gas_async(
         proxy=proxy,
     )
     async with client as c:
+        store, serial = await _setup_store(db, api_version, c)
         while True:
             if api_version == "v2":
-                m = await c.get_json_v2("/api/measurement", MeasurementV2)
-                data = convert_v2_measurement(m)
+                data = await c.get_json_v2("/api/measurement", Measurement)
             else:
-                data = await c.get_json("/api/v1/data", DataResponse)
+                data = await c.get_json("/api/v1/data", Measurement)
+            if store and serial:
+                store.append(data.model_dump(), serial)
 
             if full:
                 if data.total_gas_m3 is not None:

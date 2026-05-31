@@ -116,6 +116,27 @@ class TestAlertDispatcher:
             )
             await d.dispatch("test > 1", {"test": 2})
 
+    @pytest.mark.asyncio
+    async def test_dispatch_both_webhook_and_command_fail(self):
+        mock_client = MagicMock()
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=None)
+        mock_client.post = AsyncMock(side_effect=httpx.ConnectError("webhook fail"))
+
+        with (
+            patch("httpx.AsyncClient", return_value=mock_client),
+            patch(
+                "asyncio.create_subprocess_shell",
+                side_effect=RuntimeError("subprocess fail"),
+            ),
+        ):
+            d = AlertDispatcher(
+                webhook_urls=["https://hook.example.com"],
+                commands=["echo test"],
+                cooldown_seconds=0.0,
+            )
+            await d.dispatch("test > 1", {"test": 2})
+
 
 class TestDataAlertIntegration:
     def test_data_help_shows_alert_options(self):

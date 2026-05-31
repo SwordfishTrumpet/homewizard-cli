@@ -6,10 +6,10 @@ import json
 import typer
 from rich.console import Console
 
-from ..client_factory import resolve_client, API_VERSIONS
-from ..models import DataResponse
-from ..models.v2 import DeviceInfoV2, SystemV2
+from ..client_factory import API_VERSIONS, resolve_client
 from ..config import resolve_host
+from ..models import Measurement
+from ..models.v2 import DeviceInfoV2, SystemV2
 
 app = typer.Typer()
 
@@ -69,7 +69,8 @@ async def _info_async(
             console.print(f"Firmware:    {device.firmware_version or 'N/A'}")
             console.print(f"API:         {device.api_version or 'N/A'}")
             console.print(
-                f"WiFi:        {system.wifi_ssid or 'N/A'} ({system.wifi_rssi_db or '?'} dBm)"
+                f"WiFi:        {system.wifi_ssid or 'N/A'} "
+                f"({system.wifi_rssi_db or '?'} dBm)"
             )
             console.print(
                 f"Cloud:       {'enabled' if system.cloud_enabled else 'disabled'}"
@@ -79,7 +80,7 @@ async def _info_async(
             device = json.loads(raw)
             system_raw = await c.get("/api/v1/system")
             system = json.loads(system_raw)
-            data = await c.get_json("/api/v1/data", DataResponse)
+            data = await c.get_json("/api/v1/data", Measurement)
             console.print(f"Product:     {device.get('product_name', 'N/A')}")
             console.print(f"Type:        {device.get('product_type', 'N/A')}")
             console.print(f"Serial:      {device.get('serial', 'N/A')}")
@@ -89,5 +90,6 @@ async def _info_async(
             console.print(f"Meter:       {data.meter_model}")
             console.print(f"DSMR:        {data.smr_version / 10}")
             console.print(
-                f"Cloud:       {'enabled' if system.get('cloud_enabled') else 'disabled'}"
+                f"Cloud:       "
+                f"{'enabled' if system.get('cloud_enabled') else 'disabled'}"
             )

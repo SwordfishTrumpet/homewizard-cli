@@ -6,7 +6,7 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
-from ..discovery import discover_host, discover_all_hosts, _save_cache
+from ..discovery import _save_cache, discover_all_hosts, discover_host
 
 app = typer.Typer()
 

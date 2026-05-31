@@ -1,11 +1,13 @@
 """Raw DSMR telegram formatter (reconstructed from API data)."""
 
 from rich.console import Console
-from homewizard_cli.models import DataResponse
+
+from homewizard_cli.models import Measurement
+
 from ..util import _crc16
 
 
-def write_raw(data: DataResponse, console: Console):
+def write_raw(data: Measurement, console: Console):
     """Output raw DSMR telegram reconstructed from available API data."""
     lines = [f"/{data.meter_model}"]
     lines.append("")

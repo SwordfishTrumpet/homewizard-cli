@@ -5,7 +5,7 @@ import json
 import logging
 import os
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 log = logging.getLogger(__name__)
 
@@ -41,7 +41,7 @@ class AlertDispatcher:
             return
         self._mark_fired()
 
-        timestamp = datetime.now(timezone.utc).isoformat()
+        timestamp = datetime.now(UTC).isoformat()
         payload = {"timestamp": timestamp, "condition": condition, "data": data}
         tasks: list[asyncio.Task] = []
 

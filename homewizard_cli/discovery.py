@@ -2,14 +2,13 @@
 
 import asyncio
 import json
-from pathlib import Path
 from datetime import datetime, timedelta
+from pathlib import Path
 
 import httpx
-from zeroconf import ServiceBrowser, Zeroconf, ServiceListener
+from zeroconf import ServiceBrowser, ServiceListener, Zeroconf
 
 from .errors import DeviceNotFoundError
-
 
 CACHE_DIR = Path.home() / ".config" / "homewizard-cli"
 CACHE_FILE = CACHE_DIR / "host"
@@ -177,9 +176,9 @@ async def discover_arp(timeout: float = 3.0) -> str | None:
             if len(parts) >= 4:
                 ip = parts[0]
                 mac = parts[3]
-                if mac.startswith("5c:62:8b") or mac.startswith("3c:61:05"):
-                    if await _probe_host(ip, timeout=1.0):
-                        return ip
+                is_hw_mac = mac.startswith("5c:62:8b") or mac.startswith("3c:61:05")
+                if is_hw_mac and await _probe_host(ip, timeout=1.0):
+                    return ip
     except (FileNotFoundError, PermissionError):
         pass
     return None

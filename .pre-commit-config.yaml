@@ -1,0 +1,41 @@
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.11.0
+    hooks:
+      - id: ruff
+        args: ["check", "homewizard_cli/", "tests/"]
+      - id: ruff-format
+        args: ["homewizard_cli/", "tests/"]
+
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.15.0
+    hooks:
+      - id: mypy
+        args: ["--check-untyped-defs", "homewizard_cli/", "tests/"]
+        additional_dependencies:
+          - pydantic>=2.0.0
+          - httpx>=0.27.0
+          - typer>=0.12.0
+          - rich>=13.0.0
+
+  - repo: local
+    hooks:
+      - id: pytest
+        name: pytest
+        entry: pytest
+        language: system
+        types: [python]
+        pass_filenames: false
+        args: ["-q", "tests/"]
+
+  - repo: https://github.com/codespell-project/codespell
+    rev: v2.4.1
+    hooks:
+      - id: codespell
+        args: ["--skip=.venv", "homewizard_cli/", "tests/", "README.md", "TRD.md"]
+
+  - repo: https://github.com/pycqa/bandit
+    rev: 1.8.3
+    hooks:
+      - id: bandit
+        args: ["-r", "homewizard_cli/"]

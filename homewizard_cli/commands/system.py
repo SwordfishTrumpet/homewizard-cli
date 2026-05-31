@@ -7,10 +7,10 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
-from ..client_factory import resolve_client, API_VERSIONS
+from ..client_factory import API_VERSIONS, resolve_client
+from ..config import resolve_host
 from ..models import SystemResponse
 from ..models.v2 import SystemV2
-from ..config import resolve_host
 
 app = typer.Typer()
 
@@ -109,5 +109,6 @@ async def _system_async(
                 new_value = bool(cloud) if cloud is not None else current.cloud_enabled
             result = await c.put_json("/api/v1/system", {"cloud_enabled": new_value})
             console.print(
-                f"cloud_enabled: {current.cloud_enabled} \u2192 {result.get('cloud_enabled', new_value)}"
+                f"cloud_enabled: {current.cloud_enabled} "
+                f"\u2192 {result.get('cloud_enabled', new_value)}"
             )

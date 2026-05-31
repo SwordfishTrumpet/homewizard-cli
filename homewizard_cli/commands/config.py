@@ -11,6 +11,9 @@ app = typer.Typer()
 @app.callback(invoke_without_command=True)
 def config(
     validate: bool = typer.Option(False, "--validate", help="Validate config file"),
+    host: str | None = typer.Option(
+        None, "--host", "-H", help="P1 meter IP (ignored for config)"
+    ),
 ):
     """Manage homewizard-cli configuration."""
     console = Console()

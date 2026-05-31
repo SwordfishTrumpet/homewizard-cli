@@ -1,6 +1,7 @@
 """homewizard-cli export command."""
 
 import asyncio
+import contextlib
 import errno
 import json
 import os
@@ -12,14 +13,14 @@ import typer
 from rich.console import Console
 
 from ..alerting import AlertDispatcher
-from ..client_factory import resolve_client, convert_v2_measurement, API_VERSIONS
+from ..client_factory import API_VERSIONS, resolve_client
+from ..config import load_config, resolve_host
 from ..errors import P1Error
-from ..models import DataResponse
-from ..models.v2 import MeasurementV2
-from ..format import get_format, write_data, Format
-from ..config import resolve_host, load_config
-from ..state import DeltaTracker
 from ..expr import evaluate_until
+from ..format import Format, get_format, write_data
+from ..models import Measurement
+from ..state import DeltaTracker
+from ..storage import _setup_store
 
 app = typer.Typer()
 
@@ -165,6 +166,14 @@ def export(
         "--alert-cooldown",
         help="Minimum seconds between alert dispatches",
     ),
+    db: str | None = typer.Option(
+        None, "--db", help="SQLite database path for historical storage"
+    ),
+    retain_days: int | None = typer.Option(
+        None,
+        "--retain-days",
+        help="Auto-prune rows older than N days (requires --db)",
+    ),
 ):
     """Export data in machine-readable formats."""
     asyncio.run(
@@ -191,14 +200,16 @@ def export(
             alert_webhook=alert_webhook,
             alert_cmd=alert_cmd,
             alert_cooldown=alert_cooldown,
+            db=db,
+            retain_days=retain_days,
         )
     )
 
 
-def _filter_fields(data: DataResponse, fields_str: str | None) -> dict | None:
+def _filter_fields(data: Measurement, fields_str: str | None) -> dict | None:
     if not fields_str:
         return None
-    wanted = set(f.strip() for f in fields_str.split(","))
+    wanted = {f.strip() for f in fields_str.split(",")}
     return {k: v for k, v in data.model_dump().items() if k in wanted}
 
 
@@ -225,6 +236,8 @@ async def _export_async(
     alert_webhook: str | None = None,
     alert_cmd: str | None = None,
     alert_cooldown: float = 0.0,
+    db: str | None = None,
+    retain_days: int | None = None,
 ):
     console = Console()
     host = resolve_host(host)
@@ -292,10 +305,11 @@ async def _export_async(
     file_handle = None
     file_path = None
     last_rotation_key = None
+    file_stack = contextlib.ExitStack()
 
     if file:
         file_path = Path(file)
-        file_handle = open(file, "a")
+        file_handle = file_stack.enter_context(file_path.open("a"))
 
     def _check_rotation():
         nonlocal file_handle, last_rotation_key
@@ -314,14 +328,13 @@ async def _export_async(
             try:
                 file_handle.flush()
                 os.fsync(file_handle.fileno())
-                file_handle.close()
                 file_path.rename(rotated)
-                file_handle = open(file_path, "a")
+                file_handle = file_stack.enter_context(file_path.open("a"))
                 console.print(f"  Rotated to {rotated.name}", style="green")
             except OSError as e:
                 console.print(f"  Rotation error: {e}", style="red")
                 try:
-                    file_handle = open(file_path, "a")
+                    file_handle = file_stack.enter_context(file_path.open("a"))
                 except OSError as reopen_err:
                     console.print(
                         f"Failed to reopen {file_path} after rotation: {reopen_err}",
@@ -378,13 +391,24 @@ async def _export_async(
 
     try:
         async with client as c:
+            store, serial = await _setup_store(db, api_version, c)
+            prune_counter = 0
             while not shutdown_event.is_set():
                 try:
                     if api_version == "v2":
-                        m = await c.get_json_v2("/api/measurement", MeasurementV2)
-                        data = convert_v2_measurement(m)
+                        data = await c.get_json_v2("/api/measurement", Measurement)
                     else:
-                        data = await c.get_json("/api/v1/data", DataResponse)
+                        data = await c.get_json("/api/v1/data", Measurement)
+                    if store and serial:
+                        store.append(data.model_dump(), serial)
+                        prune_counter += 1
+                        if retain_days is not None and prune_counter % 60 == 0:
+                            deleted = store.retain(retain_days)
+                            if deleted:
+                                console.print(
+                                    f"Pruned {deleted} old rows (>{retain_days}d)",
+                                    style="green",
+                                )
                 except P1Error as e:
                     if metrics_server:
                         metrics_server.errors_total += 1
@@ -394,10 +418,8 @@ async def _export_async(
                     )
                     if watch is None:
                         raise
-                    try:
+                    with contextlib.suppress(TimeoutError):
                         await asyncio.wait_for(shutdown_event.wait(), timeout=backoff)
-                    except asyncio.TimeoutError:
-                        pass
                     backoff = min(backoff * 2, max_backoff)
                     continue
 
@@ -422,10 +444,8 @@ async def _export_async(
                         tracker.update(data.model_dump())
                         if watch is None:
                             break
-                        try:
+                        with contextlib.suppress(TimeoutError):
                             await asyncio.wait_for(shutdown_event.wait(), timeout=watch)
-                        except asyncio.TimeoutError:
-                            pass
                         continue
                     tracker.update(data.model_dump())
 
@@ -441,15 +461,16 @@ async def _export_async(
                             style = "green" if diff >= 0 else "red"
                             t.add_row(
                                 k,
-                                f"[{style}]{old} \u2192 {new} (\u0394{diff:+.1f})[/{style}]",
+                                (
+                                    f"[{style}]{old} \u2192 {new} "
+                                    f"(\u0394{diff:+.1f})[/{style}]"
+                                ),
                             )
                         console.print(t)
                     if watch is None:
                         break
-                    try:
+                    with contextlib.suppress(TimeoutError):
                         await asyncio.wait_for(shutdown_event.wait(), timeout=watch)
-                    except asyncio.TimeoutError:
-                        pass
                     continue
 
                 filtered = _filter_fields(data, fields)
@@ -473,10 +494,8 @@ async def _export_async(
                         file_console.print(json.dumps(filtered, indent=2, default=str))
                         _safe_write(buf.getvalue())
                     if watch is not None:
-                        try:
+                        with contextlib.suppress(TimeoutError):
                             await asyncio.wait_for(shutdown_event.wait(), timeout=watch)
-                        except asyncio.TimeoutError:
-                            pass
                         continue
                     break
 
@@ -509,24 +528,20 @@ async def _export_async(
                     )
                     if watch is None:
                         raise
-                    try:
+                    with contextlib.suppress(TimeoutError):
                         await asyncio.wait_for(shutdown_event.wait(), timeout=backoff)
-                    except asyncio.TimeoutError:
-                        pass
                     backoff = min(backoff * 2, max_backoff)
                     continue
 
                 if watch is None:
                     break
-                try:
+                with contextlib.suppress(TimeoutError):
                     await asyncio.wait_for(shutdown_event.wait(), timeout=watch)
-                except asyncio.TimeoutError:
-                    pass
     finally:
+        shutdown_event.set()
         if mqtt_client is not None:
             await mqtt_client.close()
-        if file_handle:
-            file_handle.close()
+        file_stack.close()
         if metrics_server is not None:
             await metrics_server.stop()
         if pid_file_path is not None:

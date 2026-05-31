@@ -1,9 +1,11 @@
 """Async HTTP client for P1 Meter API."""
 
 import asyncio
+import contextlib
 import os
-import httpx
 from typing import TypeVar
+
+import httpx
 from pydantic import BaseModel
 
 from .errors import HttpError, TimeoutError
@@ -59,7 +61,6 @@ class P1Client:
         self._backoff_base = 1.0
 
     async def get(self, path: str) -> str:
-        """GET request returning raw text."""
         last_error: Exception = TimeoutError(self.timeout)
         for attempt in range(self._retries):
             try:
@@ -79,7 +80,7 @@ class P1Client:
                         min(self._backoff_base * (2**attempt), _MAX_BACKOFF)
                     )
                     continue
-                raise HttpError(e.response.status_code, str(e.request.url))
+                raise HttpError(e.response.status_code, str(e.request.url)) from e
         raise last_error
 
     async def get_json(self, path: str, model: type[T]) -> T:
@@ -112,7 +113,7 @@ class P1Client:
                         min(self._backoff_base * (2**attempt), _MAX_BACKOFF)
                     )
                     continue
-                raise HttpError(e.response.status_code, str(e.request.url))
+                raise HttpError(e.response.status_code, str(e.request.url)) from e
         raise last_error
 
     async def close(self):
@@ -123,4 +124,5 @@ class P1Client:
         return self
 
     async def __aexit__(self, *args):
-        await self.close()
+        with contextlib.suppress(Exception):
+            await self.close()

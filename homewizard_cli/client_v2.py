@@ -1,6 +1,7 @@
 """Async HTTPS client for HomeWizard API v2."""
 
 import asyncio
+import contextlib
 import ssl
 from pathlib import Path
 from typing import TypeVar
@@ -8,6 +9,7 @@ from typing import TypeVar
 import httpx
 from pydantic import BaseModel
 
+from .cacert import HOMEWIZARD_CA_CERT
 from .client import _get_proxy_url
 from .errors import HttpError, TimeoutError
 
@@ -18,14 +20,23 @@ CA_CERT_PATH = Path.home() / ".config" / "homewizard-cli" / "homewizard-ca.pem"
 T = TypeVar("T", bound=BaseModel)
 
 
-def _create_ssl_context(verify_cert: bool = True) -> ssl.SSLContext:
+def _create_ssl_context(
+    verify_cert: bool = True, identifier: str | None = None
+) -> ssl.SSLContext:
     ctx = ssl.create_default_context()
     if not verify_cert:
         ctx.check_hostname = False
         ctx.verify_mode = ssl.CERT_NONE
         return ctx
+    # Load bundled cert first
+    if HOMEWIZARD_CA_CERT and "BEGIN CERTIFICATE" in HOMEWIZARD_CA_CERT:
+        ctx.load_verify_locations(cadata=HOMEWIZARD_CA_CERT)
+        ctx.verify_flags |= ssl.VERIFY_X509_PARTIAL_CHAIN
+    # Allow user override
     if CA_CERT_PATH.exists():
         ctx.load_verify_locations(CA_CERT_PATH)
+    if identifier and verify_cert:
+        ctx.hostname_checks_common_name = True
     return ctx
 
 
@@ -39,12 +50,14 @@ class P1ClientV2:
         token: str | None = None,
         proxy: str | None = None,
         verify_cert: bool = True,
+        identifier: str | None = None,
     ):
         self.host = host
         self.timeout = timeout
         self.token = token
+        self.identifier = identifier
         proxy_url = _get_proxy_url(proxy, host)
-        ssl_ctx = _create_ssl_context(verify_cert)
+        ssl_ctx = _create_ssl_context(verify_cert, identifier=identifier)
         headers = {"X-Api-Version": "2"}
         if token:
             headers["Authorization"] = f"Bearer {token}"
@@ -77,15 +90,15 @@ class P1ClientV2:
             except httpx.HTTPStatusError as e:
                 code = e.response.status_code
                 if code == 401:
-                    raise HttpError(code, "Unauthorized — need valid token")
+                    raise HttpError(code, "Unauthorized — need valid token") from e
                 if code == 403:
-                    raise HttpError(code, "Forbidden — button press required")
+                    raise HttpError(code, "Forbidden — button press required") from e
                 if code >= 500 and attempt < self._retries - 1:
                     await asyncio.sleep(
                         min(self._backoff_base * (2**attempt), _MAX_BACKOFF)
                     )
                     continue
-                raise HttpError(code, str(e.request.url))
+                raise HttpError(code, str(e.request.url)) from e
         raise last_error
 
     async def get_json_v2(self, path: str, model: type[T]) -> T:
@@ -116,7 +129,7 @@ class P1ClientV2:
                         min(self._backoff_base * (2**attempt), _MAX_BACKOFF)
                     )
                     continue
-                raise HttpError(e.response.status_code, str(e.request.url))
+                raise HttpError(e.response.status_code, str(e.request.url)) from e
         raise last_error
 
     async def post_json(self, path: str, data: dict) -> dict:
@@ -139,7 +152,7 @@ class P1ClientV2:
                         min(self._backoff_base * (2**attempt), _MAX_BACKOFF)
                     )
                     continue
-                raise HttpError(e.response.status_code, str(e.request.url))
+                raise HttpError(e.response.status_code, str(e.request.url)) from e
         raise last_error
 
     async def delete(self, path: str) -> dict:
@@ -162,7 +175,7 @@ class P1ClientV2:
                         min(self._backoff_base * (2**attempt), _MAX_BACKOFF)
                     )
                     continue
-                raise HttpError(e.response.status_code, str(e.request.url))
+                raise HttpError(e.response.status_code, str(e.request.url)) from e
         raise last_error
 
     async def pair(self, name: str = "local/cli") -> dict:
@@ -175,4 +188,5 @@ class P1ClientV2:
         return self
 
     async def __aexit__(self, *args):
-        await self.close()
+        with contextlib.suppress(Exception):
+            await self.close()

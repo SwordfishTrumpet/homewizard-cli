@@ -1,5 +1,10 @@
+import tomllib
+from pathlib import Path
 from unittest.mock import AsyncMock, patch
+
 from typer.testing import CliRunner
+
+from homewizard_cli import __version__
 from homewizard_cli.main import app
 from homewizard_cli.models import DataResponse
 
@@ -9,7 +14,18 @@ runner = CliRunner()
 def test_cli_version():
     result = runner.invoke(app, ["--version"])
     assert result.exit_code == 0
-    assert "homewizard-cli version:" in result.output
+    assert f"homewizard-cli v{__version__}" in result.output
+
+
+def test_version_matches_pyproject():
+    pyproject_path = Path(__file__).parent.parent / "pyproject.toml"
+    with open(pyproject_path, "rb") as f:
+        data = tomllib.load(f)
+    pyproject_version = data["project"]["version"]
+    assert __version__ == pyproject_version, (
+        f"Version mismatch: __init__.py has {__version__}, "
+        f"pyproject.toml has {pyproject_version}"
+    )
 
 
 def test_cli_help():
@@ -95,3 +111,63 @@ def test_quality_help():
     result = runner.invoke(app, ["quality", "--help"])
     assert result.exit_code == 0
     assert "quality" in result.output.lower()
+
+
+def test_default_command_v2():
+    """Test default command with v2 API (no --api-version flag)."""
+    with patch("homewizard_cli.main.resolve_client") as mock_resolve:
+        mock_instance = AsyncMock()
+        mock_instance.__aenter__ = AsyncMock(return_value=mock_instance)
+        mock_instance.__aexit__ = AsyncMock(return_value=None)
+        mock_instance.get_json_v2 = AsyncMock(
+            return_value=DataResponse(
+                wifi_ssid="TestV2",
+                wifi_strength=50,
+                smr_version=50,
+                meter_model="TESTV2",
+                unique_id="abc",
+                active_tariff=1,
+                total_power_import_kwh=200.0,
+                total_power_import_t1_kwh=100.0,
+                total_power_import_t2_kwh=100.0,
+                total_power_export_kwh=0.0,
+                total_power_export_t1_kwh=0.0,
+                total_power_export_t2_kwh=0.0,
+                active_power_w=1000.0,
+            )
+        )
+        mock_resolve.return_value = mock_instance
+
+        result = runner.invoke(app, ["--api-version", "v2"])
+        assert result.exit_code == 0
+        assert "TESTV2" in result.output
+
+
+def test_energy_command():
+    """Test energy command with mocked v1 client."""
+    with patch("homewizard_cli.commands.energy.resolve_client") as mock_resolve:
+        mock_instance = AsyncMock()
+        mock_instance.__aenter__ = AsyncMock(return_value=mock_instance)
+        mock_instance.__aexit__ = AsyncMock(return_value=None)
+        mock_instance.get_json = AsyncMock(
+            return_value=DataResponse(
+                wifi_ssid="Test",
+                wifi_strength=100,
+                smr_version=50,
+                meter_model="TEST",
+                unique_id="abc",
+                active_tariff=1,
+                total_power_import_kwh=100.0,
+                total_power_import_t1_kwh=50.0,
+                total_power_import_t2_kwh=50.0,
+                total_power_export_kwh=0.0,
+                total_power_export_t1_kwh=0.0,
+                total_power_export_t2_kwh=0.0,
+                active_power_w=500.0,
+            )
+        )
+        mock_resolve.return_value = mock_instance
+
+        result = runner.invoke(app, ["energy", "--api-version", "v1"])
+        assert result.exit_code == 0
+        assert "Import" in result.output

@@ -1,14 +1,19 @@
 """InfluxDB line protocol formatter."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+
 from rich.console import Console
+
 from homewizard_cli.models import DataResponse
 
 
 def write_influx(data: DataResponse, console: Console):
     """Output data as InfluxDB line protocol."""
-    timestamp_ns = int(datetime.now(timezone.utc).timestamp() * 1_000_000_000)
-    tags = f"device=HWE-P1,serial={data.unique_id},meter_model={data.meter_model.replace(' ', '_')}"
+    timestamp_ns = int(datetime.now(UTC).timestamp() * 1_000_000_000)
+    tags = (
+        f"device=HWE-P1,serial={data.unique_id},"
+        f"meter_model={data.meter_model.replace(' ', '_')}"
+    )
     fields = f"active_power_w={data.active_power_w}"
     if data.active_power_l2_w is not None:
         fields += f",active_power_l2_w={data.active_power_l2_w}"

@@ -131,3 +131,11 @@ class V2Error(BaseModel):
     """API v2 error response."""
 
     error: str
+
+
+class StateResponse(BaseModel):
+    """State response from /api/state (Energy Socket)."""
+
+    power_on: bool | None = None
+    switch_lock: bool | None = None
+    brightness: int | None = None

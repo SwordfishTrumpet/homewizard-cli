@@ -19,7 +19,7 @@ def _crc16(data: bytes) -> int:
 DEFAULT_TIMESTAMP_FORMAT = "%Y-%m-%d %H:%M:%S"
 
 
-def format_p1_timestamp(ts: int | str, fmt: str | None = None) -> str:
+def format_p1_timestamp(ts: int | str | None, fmt: str | None = None) -> str:
     try:
         s = str(ts).zfill(12)
         dt = datetime(

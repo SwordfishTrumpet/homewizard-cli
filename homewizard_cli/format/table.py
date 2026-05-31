@@ -2,8 +2,10 @@
 
 from rich.console import Console
 from rich.table import Table
+
 from homewizard_cli.config import load_config
 from homewizard_cli.models import DataResponse
+
 from ..util import format_p1_timestamp
 
 

@@ -1,6 +1,7 @@
 """Minimal one-liner output formatter."""
 
 from rich.console import Console
+
 from homewizard_cli.models import DataResponse
 
 

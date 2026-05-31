@@ -1,16 +1,21 @@
-import pytest
-import httpx
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import httpx
+import pytest
+
 from homewizard_cli.client import P1Client
-from homewizard_cli.models import DataResponse
 from homewizard_cli.errors import HttpError, TimeoutError
+from homewizard_cli.models import DataResponse
 
 
 @pytest.mark.asyncio
 async def test_client_get_json():
     """Test GET request with JSON response."""
     mock_response = MagicMock()
-    mock_response.text = '{"wifi_ssid":"Test","wifi_strength":100,"smr_version":50,"meter_model":"TEST","unique_id":"abc","active_tariff":1,"total_power_import_kwh":100.0,"total_power_import_t1_kwh":50.0,"total_power_import_t2_kwh":50.0,"total_power_export_kwh":0.0,"total_power_export_t1_kwh":0.0,"total_power_export_t2_kwh":0.0,"active_power_w":500.0}'
+    mock_response.text = (
+        '{"wifi_ssid":"Test","wifi_strength":100,"smr_version":50,"meter_model":"TEST",'
+        '"unique_id":"abc","active_tariff":1,"total_power_import_kwh":100.0,"total_power_import_t1_kwh":50.0,"total_power_import_t2_kwh":50.0,"total_power_export_kwh":0.0,"total_power_export_t1_kwh":0.0,"total_power_export_t2_kwh":0.0,"active_power_w":500.0}'
+    )
     mock_response.status_code = 200
 
     with patch("httpx.AsyncClient.get", return_value=mock_response):
@@ -69,8 +74,8 @@ async def test_client_proxy_passed_to_httpx():
     """Test that proxy config reaches httpx.AsyncClient."""
     with patch("httpx.AsyncClient") as mock:
         client = P1Client("192.168.1.1", proxy="http://p:8080")
-        client._client.aclose = AsyncMock()
-        await client.close()
+        with patch.object(client._client, "aclose", new=AsyncMock()):
+            await client.close()
     assert mock.call_args[1]["proxy"] == "http://p:8080"
 
 

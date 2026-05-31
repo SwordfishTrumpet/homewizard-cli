@@ -9,10 +9,10 @@ from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
 
-from ..client_factory import resolve_client, convert_v2_measurement, API_VERSIONS
-from ..models import DataResponse
-from ..models.v2 import MeasurementV2
+from ..client_factory import API_VERSIONS, resolve_client
 from ..config import resolve_host
+from ..models import Measurement
+from ..storage import _setup_store
 
 app = typer.Typer()
 
@@ -31,7 +31,7 @@ def _render_sparkline(values: list[float]) -> str:
     return "".join(chars)
 
 
-def _make_power_table(data: DataResponse) -> Table:
+def _make_power_table(data: Measurement) -> Table:
     t = Table(show_header=False, box=None, padding=(0, 1))
     t.add_column("Field", style="cyan", no_wrap=True)
     t.add_column("Value", style="green")
@@ -46,7 +46,7 @@ def _make_power_table(data: DataResponse) -> Table:
     return t
 
 
-def _make_energy_table(data: DataResponse) -> Table:
+def _make_energy_table(data: Measurement) -> Table:
     t = Table(show_header=False, box=None, padding=(0, 1))
     t.add_column("Field", style="cyan", no_wrap=True)
     t.add_column("Value", style="green")
@@ -57,7 +57,7 @@ def _make_energy_table(data: DataResponse) -> Table:
     return t
 
 
-def _make_gas_panel(data: DataResponse) -> Panel:
+def _make_gas_panel(data: Measurement) -> Panel:
     if data.total_gas_m3 is not None:
         text = Text(f"{data.total_gas_m3:,.2f} m³", style="green")
     else:
@@ -80,6 +80,9 @@ def dashboard(
     no_verify: bool = typer.Option(
         False, "--no-verify", help="Disable SSL cert verification (v2 only)"
     ),
+    db: str | None = typer.Option(
+        None, "--db", help="SQLite database path for historical storage"
+    ),
 ):
     """Live dashboard with Rich TUI."""
     asyncio.run(
@@ -91,6 +94,7 @@ def dashboard(
             api_version=api_version,
             token=token,
             no_verify=no_verify,
+            db=db,
         )
     )
 
@@ -103,6 +107,7 @@ async def _dashboard_async(
     api_version: str = "v2",
     token: str | None = None,
     no_verify: bool = False,
+    db: str | None = None,
 ):
     console = Console()
     host = resolve_host(host)
@@ -129,37 +134,50 @@ async def _dashboard_async(
     )
 
     async with client as c:
-        with Live(layout, console=console, refresh_per_second=4, screen=True):
-            try:
-                while True:
-                    if api_version == "v2":
-                        m = await c.get_json_v2("/api/measurement", MeasurementV2)
-                        data = convert_v2_measurement(m)
-                    else:
-                        data = await c.get_json("/api/v1/data", DataResponse)
+        store, serial = await _setup_store(db, api_version, c)
+        try:
+            with Live(layout, console=console, refresh_per_second=4, screen=True):
+                try:
+                    while True:
+                        if api_version == "v2":
+                            data = await c.get_json_v2("/api/measurement", Measurement)
+                        else:
+                            data = await c.get_json("/api/v1/data", Measurement)
 
-                    sparkline_data.append(data.active_power_w)
+                        if store and serial:
+                            store.append(data.model_dump(), serial)
 
-                    layout["header"].update(
-                        Panel(
-                            f"P1 Meter \u2014 {data.meter_model}  |  WiFi: {data.wifi_ssid} ({data.wifi_strength}%)",
-                            style="bold white on blue",
+                        sparkline_data.append(data.active_power_w)
+
+                        header_text = (
+                            f"P1 Meter \u2014 {data.meter_model}  |  "
+                            f"WiFi: {data.wifi_ssid} ({data.wifi_strength}%)"
                         )
-                    )
-                    layout["main"]["power"].update(
-                        Panel(_make_power_table(data), title="Power")
-                    )
-                    layout["main"]["energy"].update(
-                        Panel(_make_energy_table(data), title="Energy")
-                    )
-                    layout["main"]["gas"].update(_make_gas_panel(data))
-                    layout["sparkline"].update(
-                        Panel(
-                            _render_sparkline(list(sparkline_data)),
-                            title=f"Power Sparkline (last {len(sparkline_data)} samples)",
+                        layout["header"].update(
+                            Panel(
+                                header_text,
+                                style="bold white on blue",
+                            )
                         )
-                    )
+                        layout["main"]["power"].update(
+                            Panel(_make_power_table(data), title="Power")
+                        )
+                        layout["main"]["energy"].update(
+                            Panel(_make_energy_table(data), title="Energy")
+                        )
+                        layout["main"]["gas"].update(_make_gas_panel(data))
+                        layout["sparkline"].update(
+                            Panel(
+                                _render_sparkline(list(sparkline_data)),
+                                title=(
+                                    f"Power Sparkline (last {len(sparkline_data)} "
+                                    "samples)"
+                                ),
+                            )
+                        )
 
-                    await asyncio.sleep(watch)
-            except asyncio.CancelledError:
-                pass
+                        await asyncio.sleep(watch)
+                except asyncio.CancelledError:
+                    pass
+        except KeyboardInterrupt:
+            pass

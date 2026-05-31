@@ -4,7 +4,6 @@ import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 
-
 CONFIG_DIR = Path.home() / ".config" / "homewizard-cli"
 CONFIG_FILE = CONFIG_DIR / "config.toml"
 
@@ -44,6 +43,18 @@ class ExportConfig:
 
 
 @dataclass
+class TariffConfig:
+    """[tariffs] section configuration."""
+
+    t1_rate: float = 0.30
+    t2_rate: float = 0.20
+    t3_rate: float = 0.25
+    t4_rate: float = 0.15
+    export_credit: float = 0.10
+    currency: str = "EUR"
+
+
+@dataclass
 class Config:
     """Parsed configuration."""
 
@@ -52,6 +63,7 @@ class Config:
     format: str | None = None
     timestamp_format: str | None = None
     export: ExportConfig | None = None
+    tariffs: TariffConfig | None = None
 
 
 def _load_export_config(data: dict) -> ExportConfig | None:
@@ -75,6 +87,21 @@ def _load_export_config(data: dict) -> ExportConfig | None:
     )
 
 
+def _load_tariff_config(data: dict) -> TariffConfig | None:
+    """Load [tariffs] section from parsed TOML data."""
+    tariff_data = data.get("tariffs", {})
+    if not tariff_data:
+        return None
+    return TariffConfig(
+        t1_rate=tariff_data.get("t1_rate", 0.30),
+        t2_rate=tariff_data.get("t2_rate", 0.20),
+        t3_rate=tariff_data.get("t3_rate", 0.25),
+        t4_rate=tariff_data.get("t4_rate", 0.15),
+        export_credit=tariff_data.get("export_credit", 0.10),
+        currency=tariff_data.get("currency", "EUR"),
+    )
+
+
 def load_config() -> Config:
     """Load config from ~/.config/homewizard-cli/config.toml."""
     if not CONFIG_FILE.exists():
@@ -89,6 +116,7 @@ def load_config() -> Config:
             format=default.get("format"),
             timestamp_format=default.get("timestamp_format"),
             export=_load_export_config(data),
+            tariffs=_load_tariff_config(data),
         )
     except (tomllib.TOMLDecodeError, FileNotFoundError):
         return Config()

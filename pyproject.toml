@@ -9,28 +9,86 @@ description = "CLI tool for HomeWizard P1 meter — read energy data, monitor po
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-    "httpx>=0.27.0",
-    "typer>=0.12.0",
-    "pydantic>=2.0.0",
-    "rich>=13.0.0",
-    "zeroconf>=0.132.0",
+    "httpx>=0.28.1",
+    "typer>=0.26.3",
+    "pydantic>=2.13.4",
+    "rich>=15.0.0",
+    "zeroconf>=0.149.16",
 ]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3 :: Only",
+    "Topic :: Home Automation",
+    "Topic :: Utilities",
+]
+license = {text = "MIT"}
+keywords = ["homewizard", "p1-meter", "dsmr", "energy", "gas", "water", "cli"]
 
 [project.optional-dependencies]
 dev = [
-    "pytest>=8.0.0",
-    "pytest-asyncio>=0.23.0",
-    "fastapi>=0.115.0",
-    "uvicorn>=0.30.0",
+    "pytest>=9.0.3",
+    "pytest-asyncio>=1.4.0",
+    "pytest-cov>=7.1.0",
+    "fastapi>=0.136.3",
+    "uvicorn>=0.48.0",
+    "syrupy>=5.2.0",
+    "hypothesis>=6.155.0",
+    "respx>=0.23.1",
+    "pre-commit>=4.6.0",
+    "codespell>=2.4.2",
+    "bandit>=1.9.4",
+]
+ws = [
+    "websockets>=16.0",
+]
+json = [
+    "orjson>=3.11.9",
+]
+mqtt = [
+    "paho-mqtt>=2.1.0",
 ]
 
 [project.scripts]
 homewizard-cli = "homewizard_cli.main:main"
 
+[project.urls]
+Homepage = "https://github.com/SwordfishTrumpet/homewizard-cli"
+Repository = "https://github.com/SwordfishTrumpet/homewizard-cli"
+Issues = "https://github.com/SwordfishTrumpet/homewizard-cli/issues"
+
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["homewizard_cli*"]
 
+[tool.coverage.run]
+source = ["homewizard_cli"]
+branch = true
+omit = [
+    "homewizard_cli/__main__.py",
+    "homewizard_cli/__init__.py",
+]
+concurrency = ["multiprocessing"]
+parallel = true
+
+[tool.coverage.report]
+exclude_also = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "class .*\\bProtocol\\):",
+]
+
+[tool.codespell]
+skip = ".venv"
+ignore-words-list = "hass"
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
 testpaths = ["tests"]

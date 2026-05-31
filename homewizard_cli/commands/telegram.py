@@ -8,11 +8,11 @@ from collections import deque
 import typer
 from rich.console import Console
 
-from ..client_factory import resolve_client, API_VERSIONS
+from ..client_factory import API_VERSIONS, resolve_client
+from ..config import resolve_host
+from ..models.v2 import TelegramV2
 from ..obis import lookup_obis
 from ..util import _crc16
-from ..models.v2 import TelegramV2
-from ..config import resolve_host
 
 app = typer.Typer()
 

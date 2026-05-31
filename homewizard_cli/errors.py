@@ -56,6 +56,13 @@ class WriteError(P1Error):
         super().__init__(message, code=7)
 
 
-class UntilConditionMet(P1Error):
+class UnsupportedError(P1Error):
+    """Device does not support this feature (exit code 8)."""
+
+    def __init__(self, message: str):
+        super().__init__(message, code=8)
+
+
+class UntilConditionMetError(P1Error):
     def __init__(self, message: str):
         super().__init__(message, code=10)

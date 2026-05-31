@@ -74,7 +74,7 @@ class WebSocketClient:
             if isinstance(message, bytes):
                 message = message.decode("utf-8")
             return json.loads(message)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             return None
 
     async def close(self) -> None:
@@ -89,7 +89,7 @@ class WebSocketClient:
                 "WebSocket support requires 'websockets' package.\n"
                 "  Install: pip install homewizard-cli[ws]",
                 code=1,
-            )
+            ) from None
         return self
 
     async def __aexit__(self, *args) -> None:

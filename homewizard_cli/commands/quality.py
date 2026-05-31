@@ -6,10 +6,10 @@ import re
 import typer
 from rich.console import Console
 
-from ..client_factory import resolve_client, convert_v2_measurement, API_VERSIONS
-from ..config import resolve_host, load_config
-from ..models import DataResponse
-from ..models.v2 import MeasurementV2, TelegramV2
+from ..client_factory import API_VERSIONS, resolve_client
+from ..config import load_config, resolve_host
+from ..models import Measurement
+from ..models.v2 import TelegramV2
 from ..util import format_p1_timestamp
 
 app = typer.Typer()
@@ -152,10 +152,9 @@ async def _quality_async(
     async with client as c:
         while True:
             if api_version == "v2":
-                m = await c.get_json_v2("/api/measurement", MeasurementV2)
-                data = convert_v2_measurement(m)
+                data = await c.get_json_v2("/api/measurement", Measurement)
             else:
-                data = await c.get_json("/api/v1/data", DataResponse)
+                data = await c.get_json("/api/v1/data", Measurement)
 
             current = (
                 data.voltage_sag_l1_count,
@@ -202,7 +201,8 @@ async def _quality_async(
                         for ev in event_log:
                             if ev["duration"]:
                                 console.print(
-                                    f"  {ev['timestamp']} \u2014 {ev['type']} ({ev['duration']} s)"
+                                    f"  {ev['timestamp']} \u2014 {ev['type']} "
+                                    f"({ev['duration']} s)"
                                 )
                             else:
                                 console.print(

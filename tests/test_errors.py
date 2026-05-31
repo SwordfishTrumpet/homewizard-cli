@@ -1,12 +1,13 @@
 from homewizard_cli.errors import (
-    P1Error,
+    CrcMismatchError,
     DeviceNotFoundError,
     HttpError,
-    TimeoutError,
+    P1Error,
     ParseError,
-    CrcMismatchError,
+    TimeoutError,
+    UnsupportedError,
+    UntilConditionMetError,
     WriteError,
-    UntilConditionMet,
 )
 
 
@@ -54,6 +55,14 @@ def test_write_error():
     assert err.code == 7
 
 
+def test_unsupported_error():
+    err = UnsupportedError("Device does not support this feature")
+    assert err.code == 8
+    assert (
+        err.to_json() == '{"error": "Device does not support this feature", "code": 8}'
+    )
+
+
 def test_until_condition():
-    err = UntilConditionMet("condition met")
+    err = UntilConditionMetError("condition met")
     assert err.code == 10

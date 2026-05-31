@@ -9,7 +9,7 @@ from rich.table import Table
 
 from ..client_v2 import P1ClientV2
 from ..config import resolve_host
-from ..errors import P1Error
+from ..errors import P1Error, UnsupportedError
 
 app = typer.Typer()
 
@@ -21,6 +21,9 @@ def users():
 
 @app.command("list")
 def users_list(
+    api_version: str = typer.Option(
+        "v2", "--api-version", help="API version (v2 only)"
+    ),
     host: str | None = typer.Option(None, "--host", "-H", help="P1 meter IP"),
     timeout: float = typer.Option(3.0, "--timeout", "-t", help="HTTP timeout"),
     token: str | None = typer.Option(None, "--token", help="API v2 auth token"),
@@ -29,10 +32,12 @@ def users_list(
     ),
 ):
     """List API users."""
-    asyncio.run(_users_list_async(host, timeout, token, no_verify))
+    asyncio.run(_users_list_async(api_version, host, timeout, token, no_verify))
 
 
-async def _users_list_async(host: str | None, timeout, token, no_verify):
+async def _users_list_async(api_version, host: str | None, timeout, token, no_verify):
+    if api_version != "v2":
+        raise UnsupportedError("This command only supports API v2")
     console = Console()
     host = resolve_host(host)
     try:
@@ -51,11 +56,14 @@ async def _users_list_async(host: str | None, timeout, token, no_verify):
                 console.print(result)
     except P1Error as e:
         console.print(str(e), style="red")
-        raise typer.Exit(code=e.code)
+        raise typer.Exit(code=e.code) from e
 
 
 @app.command("delete")
 def users_delete(
+    api_version: str = typer.Option(
+        "v2", "--api-version", help="API version (v2 only)"
+    ),
     host: str | None = typer.Option(None, "--host", "-H", help="P1 meter IP"),
     timeout: float = typer.Option(3.0, "--timeout", "-t", help="HTTP timeout"),
     token: str | None = typer.Option(None, "--token", help="API v2 auth token"),
@@ -65,10 +73,14 @@ def users_delete(
     name: str = typer.Option(..., "--name", help="User name to delete"),
 ):
     """Delete an API user."""
-    asyncio.run(_users_delete_async(host, timeout, token, no_verify, name))
+    asyncio.run(_users_delete_async(api_version, host, timeout, token, no_verify, name))
 
 
-async def _users_delete_async(host: str | None, timeout, token, no_verify, name):
+async def _users_delete_async(
+    api_version, host: str | None, timeout, token, no_verify, name
+):
+    if api_version != "v2":
+        raise UnsupportedError("This command only supports API v2")
     console = Console()
     host = resolve_host(host)
     try:
@@ -79,4 +91,4 @@ async def _users_delete_async(host: str | None, timeout, token, no_verify, name)
             console.print(f"Deleted: {json.dumps(result)}")
     except P1Error as e:
         console.print(str(e), style="red")
-        raise typer.Exit(code=e.code)
+        raise typer.Exit(code=e.code) from e

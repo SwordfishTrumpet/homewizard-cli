@@ -8,32 +8,53 @@ import typer
 from rich.console import Console
 
 from . import __version__
-from .client_factory import resolve_client, convert_v2_measurement
-from .config import load_config, DEFAULT_HOST, DEFAULT_TIMEOUT, DEFAULT_FORMAT
+from .client_factory import resolve_client
 from .commands import (
-    data,
-    power,
-    info,
-    identify,
-    system,
-    ping as ping_cmd,
-    energy,
-    gas,
-    quality,
-    telegram,
-    discover,
-    export,
-    config as config_cmd,
-    dashboard,
-    serve,
-    reboot as reboot_cmd,
-    pair as pair_cmd,
-    users as users_cmd,
     batteries as batteries_cmd,
 )
+from .commands import (
+    combined,
+    cost as cost_cmd,
+    dashboard,
+    data,
+    discover,
+    energy,
+    export,
+    gas,
+    hass,
+    identify,
+    info,
+    power,
+    quality,
+    serve,
+    system,
+    telegram,
+    water,
+)
+from .commands import (
+    config as config_cmd,
+)
+from .commands import (
+    history as history_cmd,
+)
+from .commands import (
+    pair as pair_cmd,
+)
+from .commands import (
+    ping as ping_cmd,
+)
+from .commands import (
+    reboot as reboot_cmd,
+)
+from .commands import (
+    state as state_cmd,
+)
+from .commands import (
+    users as users_cmd,
+)
+from .config import DEFAULT_FORMAT, DEFAULT_HOST, DEFAULT_TIMEOUT, load_config
 from .errors import P1Error
-from .format import write_data, get_format
-from .models import DataResponse
+from .format import get_format, write_data
 
 app = typer.Typer(
     name="homewizard-cli",
@@ -61,11 +82,25 @@ app.add_typer(reboot_cmd.app, name="reboot")
 app.add_typer(pair_cmd.app, name="pair")
 app.add_typer(users_cmd.app, name="users")
 app.add_typer(batteries_cmd.app, name="batteries")
+app.add_typer(state_cmd.app, name="state")
+app.add_typer(water.app, name="water")
+app.add_typer(combined.app, name="combined")
+app.add_typer(cost_cmd.app, name="cost")
+app.add_typer(hass.app, name="hass")
+app.add_typer(history_cmd.app, name="history")
 
 
-def _version_callback(value: bool):
+def _version_callback(value: bool) -> None:
     if value:
-        typer.echo(f"homewizard-cli version: {__version__}")
+        import platform
+        import sys
+
+        typer.echo(
+            f"homewizard-cli v{__version__} "
+            f"(Python {sys.version_info.major}."
+            f"{sys.version_info.minor}.{sys.version_info.micro}, "
+            f"{platform.system()} {platform.machine()})"
+        )
         raise typer.Exit()
 
 
@@ -142,13 +177,12 @@ async def _default_async(
         api_version, host, timeout, token=token, verify_cert=not no_verify, proxy=proxy
     )
     async with client as c:
-        if api_version == "v2":
-            from .models.v2 import MeasurementV2
+        from .models import Measurement
 
-            m = await c.get_json_v2("/api/measurement", MeasurementV2)
-            data = convert_v2_measurement(m)
+        if api_version == "v2":
+            data = await c.get_json_v2("/api/measurement", Measurement)
         else:
-            data = await c.get_json("/api/v1/data", DataResponse)
+            data = await c.get_json("/api/v1/data", Measurement)
         write_data(data, output_format, console)
 
 

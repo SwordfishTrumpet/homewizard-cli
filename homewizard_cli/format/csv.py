@@ -3,7 +3,9 @@
 import csv
 import io
 from datetime import datetime
+
 from rich.console import Console
+
 from homewizard_cli.models import DataResponse
 
 

@@ -1,4 +1,4 @@
-from homewizard_cli.obis import lookup_obis, list_obis_codes
+from homewizard_cli.obis import list_obis_codes, lookup_obis
 
 
 def test_lookup_known():
@@ -27,6 +27,14 @@ def test_lookup_gas():
 def test_lookup_invalid():
     assert lookup_obis("") is None
     assert lookup_obis("abc") is None
+
+
+def test_lookup_empty_string_explicit():
+    assert lookup_obis("") is None
+
+
+def test_lookup_malformed_no_colons():
+    assert lookup_obis("some random text") is None
 
 
 def test_list_codes():

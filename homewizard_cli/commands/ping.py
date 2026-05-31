@@ -1,15 +1,16 @@
-"""homewizard-cli ping command."""
+"""homewizard-cli ping command — ICMP echo check."""
 
-import asyncio
-import time
+import re
+import subprocess  # nosec: B404
 
 import typer
 from rich.console import Console
 
-from ..client_factory import resolve_client, API_VERSIONS
 from ..config import resolve_host
 
 app = typer.Typer()
+
+_TIME_RE = re.compile(r"time=([0-9.]+)\s*ms")
 
 
 @app.callback(invoke_without_command=True)
@@ -18,57 +19,28 @@ def ping(
         False, "--quiet", "-q", help="Only exit code, no output"
     ),
     host: str | None = typer.Option(None, "--host", "-H", help="P1 meter IP"),
-    timeout: float = typer.Option(3.0, "--timeout", "-t", help="HTTP timeout"),
-    proxy: str | None = typer.Option(None, "--proxy", help="HTTP proxy URL"),
-    api_version: str = typer.Option(
-        "v2", "--api-version", help=f"API version ({'|'.join(API_VERSIONS)})"
-    ),
-    token: str | None = typer.Option(None, "--token", help="API v2 auth token"),
-    no_verify: bool = typer.Option(
-        False, "--no-verify", help="Disable SSL cert verification (v2 only)"
-    ),
+    timeout: int = typer.Option(3, "--timeout", "-t", help="Ping timeout (seconds)"),
 ):
-    """Check if the P1 meter is reachable."""
-    asyncio.run(
-        _ping_async(
-            quiet,
-            host,
-            request_timeout=timeout,
-            proxy=proxy,
-            api_version=api_version,
-            token=token,
-            no_verify=no_verify,
-        )
-    )
-
-
-async def _ping_async(
-    quiet: bool,
-    host: str | None,
-    request_timeout: float,
-    proxy: str | None,
-    api_version: str = "v2",
-    token: str | None = None,
-    no_verify: bool = False,
-):
-    console = Console()
+    """Check if the P1 meter is reachable via ICMP."""
     host = resolve_host(host)
-    start = time.monotonic()
+    console = Console()
     try:
-        client = resolve_client(
-            api_version,
-            host,
-            request_timeout,
-            token=token,
-            verify_cert=not no_verify,
-            proxy=proxy,
+        result = subprocess.run(  # nosec
+            ["ping", "-c", "1", "-W", str(timeout), host],
+            capture_output=True,
+            text=True,
+            timeout=timeout + 2,
         )
-        async with client as c:
-            await c.get("/api/")
-        elapsed = (time.monotonic() - start) * 1000
+        if result.returncode == 0:
+            m = _TIME_RE.search(result.stdout)
+            elapsed = m.group(1) if m else "?"
+            if not quiet:
+                console.print(f"P1 Meter at {host} \u2014 OK ({elapsed}ms)")
+        else:
+            if not quiet:
+                console.print(f"P1 Meter at {host} \u2014 FAIL", style="red")
+            raise typer.Exit(code=2) from None
+    except subprocess.TimeoutExpired:
         if not quiet:
-            console.print(f"P1 Meter at {host} \u2014 OK ({elapsed:.0f}ms)")
-    except Exception:
-        if not quiet:
-            console.print(f"P1 Meter at {host} \u2014 FAIL", style="red")
-        raise typer.Exit(code=2)
+            console.print(f"P1 Meter at {host} — FAIL (timeout)", style="red")
+        raise typer.Exit(code=2) from None

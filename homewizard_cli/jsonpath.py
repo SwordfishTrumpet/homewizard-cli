@@ -1,20 +1,30 @@
 from typing import Any
 
 
-def query_jsonpath(data: dict, expression: str) -> Any:
-    if not expression or not expression.startswith("$"):
+def query_jsonpath(data: Any, expression: str) -> Any:
+    if not expression:
         return None
-    path = expression[1:]
-    if not path:
-        return data
-    if path.startswith(".."):
-        field = path[2:]
-        results: list[Any] = []
-        _recursive_find(data, field, results)
-        return results
-    if path.startswith("."):
-        path = path[1:]
-    return _navigate(data, path)
+    expression = expression.strip()
+    if expression.startswith("$"):
+        path = expression[1:]
+        if not path:
+            return data
+        if path.startswith(".."):
+            field = path[2:]
+            results: list[Any] = []
+            _recursive_find(data, field, results)
+            return results
+        if path.startswith("."):
+            path = path[1:]
+        return _navigate(data, path)
+    # Support bare field names (e.g. "active_power_w")
+    if any(op in expression for op in (">", "<", "==", "!=")):
+        from .expr import evaluate_until
+
+        return evaluate_until(data, expression)
+    if isinstance(data, dict):
+        return data.get(expression)
+    return None
 
 
 def _navigate(data: Any, path: str) -> Any:
@@ -34,10 +44,7 @@ def _navigate(data: Any, path: str) -> Any:
         remaining = rest[close_bracket + 1 :]
         if remaining.startswith("."):
             remaining = remaining[1:]
-        if field:
-            val = data.get(field) if isinstance(data, dict) else None
-        else:
-            val = data
+        val = (data.get(field) if isinstance(data, dict) else None) if field else data
         if val is None:
             return None
         if array_expr == "*":

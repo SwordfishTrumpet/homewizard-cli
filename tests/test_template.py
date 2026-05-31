@@ -1,8 +1,10 @@
 # tests/test_template.py
-from rich.console import Console
 from io import StringIO
-from homewizard_cli.models import DataResponse
+
+from rich.console import Console
+
 from homewizard_cli.format.template import write_template
+from homewizard_cli.models import DataResponse
 
 
 def create_test_data():
@@ -84,3 +86,23 @@ def test_template_optional_field_none():
     write_template(data, console, "Gas: {{.total_gas_m3}}")
     result = output.getvalue()
     assert "Gas: " in result
+
+
+def test_template_nested_field():
+    """Nested field access {{.external.0.value}} is not resolved."""
+    output = StringIO()
+    console = Console(file=output, force_terminal=False)
+    data = create_test_data()
+    write_template(data, console, "{{.external.0.value}}")
+    result = output.getvalue()
+    assert result.strip() == "{{.external.0.value}}"
+
+
+def test_template_special_chars():
+    """Template with special characters is preserved."""
+    output = StringIO()
+    console = Console(file=output, force_terminal=False)
+    data = create_test_data()
+    write_template(data, console, "Power: {{.active_power_w}}W (test@#$%)")
+    result = output.getvalue()
+    assert "Power: 500.0W (test@#$%)" in result

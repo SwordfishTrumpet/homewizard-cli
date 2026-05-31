@@ -1,11 +1,13 @@
 """MQTT output formatter."""
 
 import asyncio
+import contextlib
 import json
 from collections import deque
 
 import paho.mqtt.client as mqtt
 from rich.console import Console
+
 from homewizard_cli.models import DataResponse
 
 
@@ -42,10 +44,8 @@ def write_mqtt(
         console.print(f"MQTT error: {e}", style="red")
         return
     finally:
-        try:
+        with contextlib.suppress(OSError):
             client.disconnect()
-        except OSError:
-            pass
 
     console.print(payload)
 
@@ -73,10 +73,8 @@ class PersistentMqttClient:
 
     def _disconnect(self) -> None:
         if self._client is not None:
-            try:
+            with contextlib.suppress(OSError):
                 self._client.disconnect()
-            except OSError:
-                pass
             self._client = None
 
     def _publish_sync(self, payload: str) -> bool:

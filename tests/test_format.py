@@ -1,10 +1,12 @@
-from rich.console import Console
 from io import StringIO
-from homewizard_cli.models import DataResponse
+
+from rich.console import Console
+
 from homewizard_cli.format import Format, get_format
 from homewizard_cli.format.json import write_json
-from homewizard_cli.format.table import write_table
 from homewizard_cli.format.minimal import write_minimal
+from homewizard_cli.format.table import write_table
+from homewizard_cli.models import DataResponse
 
 
 def create_test_data():
@@ -156,3 +158,25 @@ def test_get_format_explicit_all():
         "raw",
     ]:
         assert get_format(fmt) == Format(fmt)
+
+
+def test_write_data_auto_resolves_table_in_tty():
+    from homewizard_cli.format import write_data
+
+    output = StringIO()
+    console = Console(file=output, force_terminal=True, width=9999)
+    data = create_test_data()
+    write_data(data, Format.AUTO, console)
+    result = output.getvalue()
+    assert "P1 Meter" in result
+
+
+def test_write_data_auto_resolves_json_in_non_tty():
+    from homewizard_cli.format import write_data
+
+    output = StringIO()
+    console = Console(file=output, force_terminal=False)
+    data = create_test_data()
+    write_data(data, Format.AUTO, console)
+    result = output.getvalue()
+    assert "wifi_ssid" in result

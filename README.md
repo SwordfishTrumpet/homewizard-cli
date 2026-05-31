@@ -4,6 +4,7 @@
   <img src="https://img.shields.io/github/license/SwordfishTrumpet/homewizard-cli?label=License" alt="MIT License">
   <img src="https://img.shields.io/badge/code%20style-ruff-blueviolet" alt="Ruff">
   <img src="https://img.shields.io/badge/types-pydantic%20v2-aa4488" alt="Pydantic v2">
+  <img src="https://img.shields.io/badge/coverage-92%25-brightgreen" alt="Coverage 92%">
 </p>
 
 **A high-performance, feature-complete CLI for the HomeWizard P1 Meter.** Read real-time and cumulative energy data, monitor power quality, access raw DSMR telegrams, export to third-party systems (InfluxDB, MQTT, Prometheus, CSV/JSON), serve a REST proxy, view a live TUI dashboard, and manage device settings — all from the command line.
@@ -38,6 +39,11 @@ Supports both **API v1** (HTTP, port 80, no auth) and **API v2** (HTTPS, port 44
   - [`pair`](#pair)
   - [`users`](#users)
   - [`batteries`](#batteries)
+  - [`state`](#state)
+  - [`water`](#water)
+  - [`combined`](#combined)
+  - [`hass`](#hass)
+  - [`cost`](#cost)
   - [`config`](#config)
 - [Output Formats](#output-formats)
 - [API Versioning](#api-versioning)
@@ -84,6 +90,8 @@ Supports both **API v1** (HTTP, port 80, no auth) and **API v2** (HTTPS, port 44
 - **Go-style template** — Custom output with `--template "{{.field}}W"` syntax
 - **Expression conditions** — `--until "active_power_w > 1000"` for automated exit
 - **Graceful signal handling** — SIGINT/SIGTERM for clean shutdown of export streams
+- **Energy cost calculator** — Real-time and historical cost breakdowns with configurable tariff rates (T1–T4, export credit)
+- **SQLite historical data store** — Optional `--db` flag on any data-fetching command logs readings to a local SQLite database; `history` subcommand queries, aggregates, compares, and analyzes stored data
 
 ---
 
@@ -91,15 +99,17 @@ Supports both **API v1** (HTTP, port 80, no auth) and **API v2** (HTTPS, port 44
 
 | Component            | Library                   | Purpose                            |
 |----------------------|---------------------------|------------------------------------|
-| CLI framework        | [Typer](https://typer.tiangolo.com/) 0.12+ | Command routing, shell completions |
-| HTTP client          | [httpx](https://www.python-httpx.org/) 0.27+  | Async HTTP/HTTPS requests          |
-| Data models          | [Pydantic](https://docs.pydantic.dev/) v2    | Response validation, v1↔v2 mapping |
-| Terminal output      | [Rich](https://rich.readthedocs.io/) 13+     | Tables, panels, colors, sparklines |
-| mDNS discovery       | [python-zeroconf](https://github.com/python-zeroconf/python-zeroconf) 0.132+ | Network device discovery |
-| Config parsing       | `tomllib` (stdlib)        | TOML config file parsing           |
-| Optional: WebSocket  | [websockets](https://websockets.readthedocs.io/) 12+ | Real-time data push (v2)  |
-| Optional: REST proxy | [FastAPI](https://fastapi.tiangolo.com/) + [uvicorn](https://www.uvicorn.org/) | HTTP proxy server for `/api/*` |
-| Optional: MQTT       | [paho-mqtt](https://www.eclipse.org/paho/)    | MQTT broker publishing            |
+| Component            | Library                   | Version | Purpose                            |
+|----------------------|---------------------------|---------|------------------------------------|
+| CLI framework        | [Typer](https://typer.tiangolo.com/) | 0.26+ | Command routing, shell completions |
+| HTTP client          | [httpx](https://www.python-httpx.org/) | 0.28+ | Async HTTP/HTTPS requests          |
+| Data models          | [Pydantic](https://docs.pydantic.dev/) | 2.13+ | Response validation, v1↔v2 mapping |
+| Terminal output      | [Rich](https://rich.readthedocs.io/) | 15+ | Tables, panels, colors, sparklines |
+| mDNS discovery       | [python-zeroconf](https://github.com/python-zeroconf/python-zeroconf) | 0.149+ | Network device discovery |
+| Config parsing       | `tomllib` (stdlib)        | — | TOML config file parsing           |
+| Optional: WebSocket  | [websockets](https://websockets.readthedocs.io/) | 16+ | Real-time data push (v2)  |
+| Optional: REST proxy | [FastAPI](https://fastapi.tiangolo.com/) + [uvicorn](https://www.uvicorn.org/) | 0.136+ / 0.48+ | HTTP proxy server for `/api/*` |
+| Optional: MQTT       | [paho-mqtt](https://www.eclipse.org/paho/) | 2.1+ | MQTT broker publishing            |
 
 **Design principles:** Single HTTP request per command, async/await throughout, connection reuse, lazy loading of optional deps, never-comment patterns, typed error hierarchy with exit codes.
 
@@ -268,6 +278,7 @@ homewizard-cli data --ws --until "active_power_w > 5000"
 | `--alert-webhook`   | Webhook URL to POST when `--until` condition fires          |
 | `--alert-cmd`       | Shell command to run when `--until` condition fires         |
 | `--alert-cooldown`  | Minimum seconds between alert dispatches (default: 0)       |
+| `--agg`             | Show rolling aggregates (mean/min/max/stddev) when watching |
 | `--format`          | Output format: `table`, `json`, `csv`, `tsv`, `influx`, `prometheus`, `env`, `minimal`, `raw` |
 
 ### `power`
@@ -334,6 +345,7 @@ homewizard-cli power --format csv
 | `--full`            | Show import/export breakdown, voltage, and current          |
 | `--color`           | Color output: green when exporting, red when importing      |
 | `--sparkline`       | Unicode sparkline of last 20 power readings (▁▂▃▄▅▆▇█)      |
+| `--agg`             | Show rolling aggregates (mean/min/max/stddev) when watching |
 | `--until`           | Exit when expression is true (e.g. `abs(active_power_w) > 2000`) |
 | `--alert-webhook`   | Webhook URL to POST when `--until` condition fires          |
 | `--alert-cmd`       | Shell command to run when `--until` condition fires         |
@@ -850,12 +862,15 @@ homewizard-cli export --format json --watch 2 | curl -X POST http://influxdb:808
 | `--skip-unchanged`| Skip writing when data hasn't changed since last poll                |
 | `--fields`        | Comma-separated field names to export (e.g. `active_power_w`)       |
 | `--delta`         | Show only changed fields with colored deltas (requires `--watch`)   |
+| `--agg`           | Show rolling aggregates (mean/min/max/stddev) when watching         |
 | `--until`         | Exit when expression is true (e.g. `total_power_import_kwh > 10000`)|
 | `--alert-webhook`  | Webhook URL to POST when `--until` condition fires          |
 | `--alert-cmd`      | Shell command to run when `--until` condition fires         |
 | `--alert-cooldown` | Minimum seconds between alert dispatches (default: 0)       |
 | `--metrics-port`  | Enable Prometheus metrics HTTP endpoint on this port (0=disabled)   |
 | `--pid-file`      | Write PID to file for process management (removed on exit)          |
+| `--db`            | SQLite database path for historical logging (e.g. `energy.db`)      |
+| `--retain-days`   | Auto-prune rows older than N days (never by default)                |
 
 #### Export Features
 
@@ -997,6 +1012,181 @@ Set mode to to_full: {"status": "ok"}
 
 Valid modes: `to_full`, `zero`, `standby`, `predictive`
 
+### `state`
+
+Get or set Energy Socket state (power, switch lock, brightness).
+
+```bash
+# Read current state
+homewizard-cli state
+
+# Turn socket on
+homewizard-cli state --power-on
+
+# Turn socket off
+homewizard-cli state --power-off
+
+# Set LED brightness
+homewizard-cli state --brightness 50
+
+# Lock switch
+homewizard-cli state --switch-lock
+```
+
+**Options:**
+
+| Option            | Description                                              |
+|-------------------|----------------------------------------------------------|
+| `--power-on`      | Turn the socket on                                       |
+| `--power-off`     | Turn the socket off                                      |
+| `--switch-lock`   | Lock the switch (prevent manual toggling)                |
+| `--switch-unlock` | Unlock the switch                                        |
+| `--brightness`    | LED brightness (0–100)                                   |
+
+---
+
+### `water`
+
+Display water meter readings (flow and total consumption).
+
+```bash
+# Simple reading
+homewizard-cli water
+
+# Full details
+homewizard-cli water --full
+
+# Watch mode
+homewizard-cli water --watch 10
+```
+
+**Options:**
+
+| Option    | Description                                              |
+|-----------|----------------------------------------------------------|
+| `--full`  | Show total m³, flow L/min, last read timestamp, meter ID |
+| `--watch` | Poll interval in seconds (default: 2s)                     |
+
+---
+
+### `combined`
+
+Fetch all device models (device info, measurement, system, state, batteries) in parallel.
+
+```bash
+# One-shot combined data
+homewizard-cli combined
+
+# With explicit host
+homewizard-cli combined --host 192.168.1.100
+```
+
+---
+
+### `hass`
+
+Generate Home Assistant discovery configuration (MQTT or REST).
+
+```bash
+# MQTT discovery topics (default)
+homewizard-cli hass --mqtt
+```
+
+```json
+{"topic": "homeassistant/sensor/ABC123/power/config", "payload": {"name": "P1 Meter Power", "state_topic": "homewizard/ABC123/state", "unit_of_measurement": "W", "device_class": "power", "state_class": "measurement", "unique_id": "ABC123_power", "device": {"identifiers": ["ABC123"], "name": "P1 Meter", "model": "HWE-P1", "manufacturer": "HomeWizard"}}}
+```
+
+```bash
+# REST configuration.yaml entries
+homewizard-cli hass --rest
+```
+
+```json
+{"sensor": [{"platform": "rest", "name": "Power", "device_class": "power", "value_template": "{{ value_json.active_power_w }}", "device": {"identifiers": ["ABC123"], "name": "P1 Meter", "manufacturer": "HomeWizard"}}]}
+```
+
+Generates 7 sensors: Power, Energy Import, Energy Export, Gas, Water, Voltage L1, Current L1. Defaults to MQTT mode if neither `--mqtt` nor `--rest` is specified.
+
+**Options:**
+
+| Option           | Description                                                       |
+|------------------|-------------------------------------------------------------------|
+| `--mqtt`         | Output MQTT discovery topic/payload pairs (one per sensor)        |
+| `--rest`         | Output a single `configuration.yaml` structure with all sensors   |
+| `--topic-prefix` | MQTT state topic prefix (default: `homewizard`)                   |
+
+---
+
+### `cost`
+
+Calculate energy costs from real-time or historical data using configurable tariff rates.
+
+```bash
+# Real-time cost from current meter reading
+homewizard-cli cost
+
+# Tariff breakdown table
+homewizard-cli cost --tariffs
+
+# Today's cost from historical DB
+homewizard-cli cost --today --db energy.db
+
+# Yesterday's cost
+homewizard-cli cost --yesterday --db energy.db
+
+# This month's cost
+homewizard-cli cost --this-month --db energy.db
+
+# Live cost ticker updating every 5 seconds
+homewizard-cli cost --watch 5
+
+# Custom rates
+homewizard-cli cost --t1-rate 0.35 --t2-rate 0.25 --currency USD
+```
+
+**Output example:**
+
+```
+Current Cost Breakdown:
+┌─────────────┬──────────┬───────┬─────────┐
+│ Tariff      │ kWh      │ Rate  │ Cost    │
+├─────────────┼──────────┼───────┼─────────┤
+│ T1 (peak)   │ 8,234.57 │ 0.30€ │ 2,470.37€ │
+│ T2 (off-peak│ 4,111.11 │ 0.20€ │ 822.22€  │
+│ Export      │ 2,345.68 │ 0.10€ │ -234.57€ │
+├─────────────┼──────────┼───────┼─────────┤
+│ Total       │          │       │ 3,058.02€ │
+└─────────────┴──────────┴───────┴─────────┘
+```
+
+**Options:**
+
+| Option              | Description                                                  |
+|---------------------|--------------------------------------------------------------|
+| `--tariffs`         | Show tariff breakdown table                                   |
+| `--watch`           | Poll interval in seconds (default: 2s)                        |
+| `--today`           | Calculate today's cost from historical DB                       |
+| `--yesterday`       | Calculate yesterday's cost from historical DB                   |
+| `--this-month`      | Calculate this month's cost from historical DB                  |
+| `--db`              | SQLite database path (default: `~/.config/homewizard-cli/energy.db`) |
+| `--t1-rate`         | T1 tariff rate (€/kWh)                                         |
+| `--t2-rate`         | T2 tariff rate (€/kWh)                                         |
+| `--t3-rate`         | T3 tariff rate (€/kWh)                                         |
+| `--t4-rate`         | T4 tariff rate (€/kWh)                                         |
+| `--export-credit`   | Export credit per kWh (€/kWh)                                  |
+| `--currency`        | Currency symbol (default: EUR)                               |
+
+**Config file:** Add `[tariffs]` to `~/.config/homewizard-cli/config.toml`:
+```toml
+[tariffs]
+t1_rate = 0.30
+t2_rate = 0.20
+export_credit = 0.10
+currency = "EUR"
+```
+
+---
+
 ### `config`
 
 Configuration management.
@@ -1008,6 +1198,82 @@ homewizard-cli config --validate
 # Show config file location and contents
 homewizard-cli config --show
 ```
+
+---
+
+### `history`
+
+Query historical data previously logged to a SQLite database via `--db` on data-fetching commands. Pure local queries — no HTTP calls to the device.
+
+```bash
+# DB metadata
+homewizard-cli history --info
+```
+
+```
+Database:    ~/.config/homewizard-cli/energy.db
+Size:        4.2 MB
+Rows:        87,402
+Devices:     1 (ABC123 — P1 Meter)
+Date range:  2026-03-14 08:00:00 .. 2026-05-29 14:32:00
+Completeness: 94.3%
+```
+
+```bash
+# Yesterday's hourly power profile
+homewizard-cli history --yesterday --agg hourly --field active_power_w
+
+# This month's daily import/export as CSV
+homewizard-cli history --this-month --agg daily --fields total_power_import_kwh,total_power_export_kwh --format csv
+
+# Compare this week to last week
+homewizard-cli history --this-week --compare last-week --fields active_power_w,total_power_import_kwh
+
+# Peak power readings this month
+homewizard-cli history --this-month --top 5 --field active_power_w
+
+# Lowest gas readings
+homewizard-cli history --this-month --bottom 5 --field total_gas_m3
+
+# See what was logged while the exporter was down
+homewizard-cli history --since-last --agg daily --field total_power_import_kwh
+
+# List all devices in the DB
+homewizard-cli history --list-devices
+
+# Filter by device in a multi-device DB
+homewizard-cli history --device-id ABC123 --yesterday --agg hourly --field active_power_w
+
+# Reclaim disk space
+homewizard-cli history --vacuum
+
+# Custom DB path
+homewizard-cli history --db /mnt/nas/archive.db --this-month --agg daily
+```
+
+**Options:**
+
+| Option              | Description                                                      |
+|---------------------|------------------------------------------------------------------|
+| `--today`           | All rows from today                                              |
+| `--yesterday`       | All rows from yesterday                                          |
+| `--this-week`       | Monday 00:00 to now                                              |
+| `--this-month`      | 1st 00:00 to now                                                 |
+| `--range`           | Arbitrary date range, e.g. `"2026-05-01..2026-05-29"`           |
+| `--since-last`      | Rows from the most recent stored timestamp to now                |
+| `--compare`         | Delta vs prior period: `last-week`, `last-month`, `last-year`    |
+| `--top`             | Top N readings for the selected field(s)                         |
+| `--bottom`          | Bottom N readings for the selected field(s)                      |
+| `--fields`          | Comma-separated field names (same as `data --fields`)            |
+| `--device-id`       | Filter by device serial                                          |
+| `--list-devices`    | Print all device serials in the DB                               |
+| `--agg`             | Aggregate: `hourly`, `daily`, `weekly`, `monthly`                |
+| `--info`            | DB metadata: row count, date range, devices, completeness, size  |
+| `--vacuum`          | Reclaim disk space                                               |
+| `--format`          | Output format (same as other commands)                           |
+| `--db`              | SQLite database path (default: `~/.config/homewizard-cli/energy.db`, overridable via `HW_DB` env var) |
+
+The default database path is `~/.config/homewizard-cli/energy.db`, which can be overridden with the `HW_DB` environment variable.
 
 ---
 
@@ -1060,7 +1326,9 @@ homewizard-cli info --token MY_TOKEN --no-verify
 
 **v2-only commands** (no v1 equivalent): `reboot`, `pair`, `users list`, `users delete`, `batteries`
 
-v2 measurement data is automatically converted to v1 format (`DataResponse`) so all existing formatters and display commands work seamlessly with both API versions. Fields without v2 equivalents (`wifi_ssid`, `wifi_strength`, `text_message`, compact timestamps) are set to empty/default values.
+v2 measurement data is automatically mapped to v1 field names via the unified `Measurement` model so all formatters and display commands work seamlessly with both API versions. Fields without v2 equivalents (`wifi_ssid`, `wifi_strength`, `text_message`) default to empty values.
+
+---
 
 ---
 
@@ -1334,7 +1602,10 @@ Typed error hierarchy with distinct exit codes:
 | 5         | `ParseError`         | Response parsing failed                |
 | 6         | `CrcError`           | Telegram CRC mismatch                  |
 | 7         | `WriteError`         | File/MQTT write failure                |
+| 8         | `UnsupportedError`   | Device does not support this feature   |
 | 10        | `SystemExit(10)`     | `--until` condition was met            |
+
+Commands automatically detect device capabilities (e.g., `telegram` on a P1 Meter, `state` on an Energy Socket). If a command is invoked on a device that does not support it, the CLI exits with code **8** and prints an informative message.
 
 All errors are caught at the entry point (`main.py`) and printed in red with their exit code.
 
@@ -1344,9 +1615,16 @@ All errors are caught at the entry point (`main.py`) and printed in red with the
 
 The v2 client (HTTPS) handles SSL certificates as follows:
 
-1. Looks for a HomeWizard CA certificate at `~/.config/homewizard-cli/homewizard-ca.pem`
-2. If absent, uses the system's default CA store
-3. `--no-verify` disables certificate verification entirely (useful for self-signed certs or development)
+1. Loads the bundled HomeWizard CA certificate (if available in the package)
+2. Looks for a user-provided CA certificate at `~/.config/homewizard-cli/homewizard-ca.pem`
+3. If neither is present, uses the system's default CA store
+4. `--no-verify` disables certificate verification entirely (useful for self-signed certs or development)
+
+The bundled certificate enables `ssl.VERIFY_X509_PARTIAL_CHAIN` for proper chain validation.
+
+**Hostname verification:** When a device identifier is available (from device info), the SSL context enables `hostname_checks_common_name` for proper hostname verification.
+
+**`--no-verify` safety:** Using `--no-verify` without `--token` on API v2 is rejected with exit code 1, because v2 requires authentication and disabling verification without a token is almost always wrong. When `--no-verify` is used with a token, a warning is logged: "SSL verification disabled — connections are insecure."
 
 ---
 
@@ -1420,8 +1698,11 @@ git clone https://github.com/SwordfishTrumpet/homewizard-cli
 cd homewizard-cli
 uv sync
 
-# Lint
+# Lint (basic rules)
 uv run ruff check homewizard_cli/ tests/
+
+# Lint (extended rules — SIM, B, N, UP, I, C4)
+uv run ruff check homewizard_cli/ tests/ --select E,W,F,I,UP,N,B,C4,SIM
 
 # Typecheck (basic)
 uv run python -m mypy homewizard_cli/ tests/
@@ -1432,8 +1713,20 @@ uv run python -m mypy --check-untyped-defs homewizard_cli/ tests/
 # Run tests
 uv run python -m pytest tests/ -v
 
+# Run tests with clean output (isolated processes — no warnings)
+uv run python -m pytest tests/ --forked -v
+
 # Run a single test file
-uv run python -m pytest tests/test_data.py -v
+uv run python -m pytest tests/test_commands.py -v
+
+# Coverage
+uv run python -m pytest tests/ --cov=homewizard_cli --cov-report=term-missing --cov-fail-under=90
+
+# Install pre-commit hooks
+uv run pre-commit install
+
+# Run pre-commit hooks manually
+uv run pre-commit run --all-files
 ```
 
 Test fixtures live in `tests/fixtures/` (e.g., `api.json`, `data.json`, `system.json`). Mock patterns:

@@ -2,12 +2,14 @@ import asyncio
 import importlib
 from typing import Any
 
+import httpx
 import typer
 from rich.console import Console
 
-from ..client_factory import resolve_client, API_VERSIONS
+from ..client_factory import API_VERSIONS, resolve_client
 from ..client_v2 import _create_ssl_context
 from ..config import resolve_host
+from ..obis import lookup_obis
 
 app = typer.Typer()
 
@@ -30,8 +32,6 @@ def _create_app(
 
     fastapi_app = FastAPI(title="homewizard-cli Proxy")
     _cache: dict[str, tuple[float, Any]] = {}
-
-    import httpx
 
     protocol = "https" if api_version == "v2" else "http"
     headers = {}
@@ -68,6 +68,13 @@ def _create_app(
     @fastapi_app.get("/")
     async def root():
         return {"service": "homewizard-cli proxy", "target": client_host}
+
+    @fastapi_app.get("/obis/{code}")
+    async def obis_endpoint(code: str):
+        name = lookup_obis(code)
+        if name is None:
+            return {"code": code, "name": None, "error": "Unknown OBIS code"}
+        return {"code": code, "name": name}
 
     return fastapi_app
 
@@ -141,7 +148,7 @@ async def _serve_async(
         console.print(f"P1 Meter at {host} \u2014 OK", style="green")
     except Exception as e:
         console.print(f"P1 Meter at {host} \u2014 FAIL: {e}", style="red")
-        raise typer.Exit(code=2)
+        raise typer.Exit(code=2) from e
 
     import uvicorn  # type: ignore[import-not-found]
 

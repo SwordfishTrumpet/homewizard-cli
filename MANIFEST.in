@@ -1,0 +1,7 @@
+include README.md
+include LICENSE
+include pyproject.toml
+include MANIFEST.in
+recursive-include homewizard_cli *.py
+recursive-include homewizard_cli py.typed
+global-exclude __pycache__ *.py[cod] .DS_Store

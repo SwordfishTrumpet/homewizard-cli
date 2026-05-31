@@ -1,7 +1,9 @@
 """Template output formatter."""
 
 import re
+
 from rich.console import Console
+
 from homewizard_cli.models import DataResponse
 
 _TEMPLATE_RE = re.compile(r"\{\{\.([a-zA-Z_][a-zA-Z0-9_]*)\}\}")

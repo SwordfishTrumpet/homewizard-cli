@@ -8,21 +8,21 @@ from rich.console import Console
 from rich.table import Table
 
 from ..alerting import AlertDispatcher
-from ..client_factory import resolve_client, convert_v2_measurement, API_VERSIONS
-from ..models import DataResponse
-from ..models.v2 import MeasurementV2
-from ..format import write_data, get_format, Format
-from ..expr import evaluate_until
-from ..jsonpath import query_jsonpath
-from ..state import DeltaTracker
+from ..client_factory import API_VERSIONS, resolve_client
 from ..config import resolve_host
+from ..expr import evaluate_until
+from ..format import Format, get_format, write_data
+from ..jsonpath import query_jsonpath
+from ..models import Measurement
+from ..state import Aggregator, DeltaTracker
+from ..storage import _setup_store
 from ..ws_client import WebSocketClient
 
 
-def _filter_fields(data: DataResponse, fields_str: str | None) -> dict | None:
+def _filter_fields(data: Measurement, fields_str: str | None) -> dict | None:
     if not fields_str:
         return None
-    wanted = set(f.strip() for f in fields_str.split(","))
+    wanted = {f.strip() for f in fields_str.split(",")}
     return {k: v for k, v in data.model_dump().items() if k in wanted}
 
 
@@ -82,6 +82,14 @@ def data(
         "--alert-cooldown",
         help="Minimum seconds between alert dispatches",
     ),
+    agg: bool = typer.Option(
+        False,
+        "--agg",
+        help="Show rolling aggregates (mean/min/max/stddev) when watching",
+    ),
+    db: str | None = typer.Option(
+        None, "--db", help="SQLite database path for historical storage"
+    ),
 ):
     """Fetch and display full energy data."""
     asyncio.run(
@@ -103,12 +111,32 @@ def data(
             alert_webhook=alert_webhook,
             alert_cmd=alert_cmd,
             alert_cooldown=alert_cooldown,
+            agg=agg,
+            db=db,
         )
     )
 
 
+def _handle_agg_output(
+    d: Measurement,
+    aggregator: Aggregator | None,
+    console: Console,
+) -> bool:
+    """Update aggregator and print merged raw+agg JSON if >=2 samples.
+    Returns True if output was handled (caller should skip normal print).
+    """
+    if aggregator is None:
+        return False
+    agg_dict = aggregator.update(d.model_dump())
+    if agg_dict:
+        merged = {**d.model_dump(), **agg_dict}
+        console.print(json.dumps(merged, indent=2, default=str))
+        return True
+    return False
+
+
 def _handle_data_output(
-    d: DataResponse,
+    d: Measurement,
     *,
     query: str | None,
     delta: bool,
@@ -118,7 +146,10 @@ def _handle_data_output(
     output_format: Format,
     console: Console,
 ) -> bool:
-    """Process and display a single data response. Returns True if caller should stop."""
+    """Process and display a single data response.
+
+    Returns True if caller should stop.
+    """
     if query:
         result = query_jsonpath(d.model_dump(), query)
         console.print(json.dumps(result, indent=2, default=str))
@@ -180,6 +211,8 @@ async def _data_async(
     alert_webhook: str | None = None,
     alert_cmd: str | None = None,
     alert_cooldown: float = 0.0,
+    agg: bool = False,
+    db: str | None = None,
 ):
     console = Console()
     host = resolve_host(host)
@@ -211,6 +244,10 @@ async def _data_async(
         else:
             tracker = DeltaTracker()
 
+    aggregator: Aggregator | None = None
+    if agg:
+        aggregator = Aggregator()
+
     if ws:
         ws_timeout = watch if watch is not None else 30.0
         wsc = WebSocketClient(
@@ -221,8 +258,7 @@ async def _data_async(
                 msg = await ws_conn.receive_data()
                 if msg is None:
                     continue
-                m = MeasurementV2(**msg)
-                d = convert_v2_measurement(m)
+                d = Measurement(**msg)
 
                 if until and evaluate_until(d.model_dump(), until):
                     console.print(f"Condition met: {until}", style="green")
@@ -230,6 +266,21 @@ async def _data_async(
                         await dispatcher.dispatch(until, d.model_dump())
                     if watch is None or not dispatcher.configured:
                         raise typer.Exit(code=10)
+                    _handle_data_output(
+                        d,
+                        query=query,
+                        delta=delta,
+                        tracker=tracker,
+                        fields=fields,
+                        template=template,
+                        output_format=output_format,
+                        console=console,
+                    )
+                    continue
+
+                if _handle_agg_output(d, aggregator, console):
+                    if watch is None:
+                        break
                     continue
 
                 _handle_data_output(
@@ -255,12 +306,15 @@ async def _data_async(
         proxy=proxy,
     )
     async with client as c:
+        store, serial = await _setup_store(db, api_version, c)
         while True:
             if api_version == "v2":
-                m = await c.get_json_v2("/api/measurement", MeasurementV2)
-                d = convert_v2_measurement(m)
+                d = await c.get_json_v2("/api/measurement", Measurement)
             else:
-                d = await c.get_json("/api/v1/data", DataResponse)
+                d = await c.get_json("/api/v1/data", Measurement)
+
+            if store and serial:
+                store.append(d.model_dump(), serial)
 
             if until and evaluate_until(d.model_dump(), until):
                 console.print(f"Condition met: {until}", style="green")
@@ -268,6 +322,22 @@ async def _data_async(
                     await dispatcher.dispatch(until, d.model_dump())
                 if watch is None or not dispatcher.configured:
                     raise typer.Exit(code=10)
+                _handle_data_output(
+                    d,
+                    query=query,
+                    delta=delta,
+                    tracker=tracker,
+                    fields=fields,
+                    template=template,
+                    output_format=output_format,
+                    console=console,
+                )
+                await asyncio.sleep(watch)
+                continue
+
+            if _handle_agg_output(d, aggregator, console):
+                if watch is None:
+                    return
                 await asyncio.sleep(watch)
                 continue
 

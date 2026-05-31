@@ -1,0 +1,8 @@
+{
+  "cloud_enabled": true,
+  "wifi_ssid": "Metta",
+  "wifi_rssi_db": -42.0,
+  "uptime_s": 86400,
+  "status_led_brightness_pct": 100,
+  "api_v1_enabled": true
+}

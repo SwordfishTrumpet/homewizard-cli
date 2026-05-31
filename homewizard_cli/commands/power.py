@@ -7,12 +7,12 @@ import typer
 from rich.console import Console
 
 from ..alerting import AlertDispatcher
-from ..client_factory import resolve_client, convert_v2_measurement, API_VERSIONS
-from ..models import DataResponse
-from ..models.v2 import MeasurementV2
-from ..format import get_format, write_data
-from ..expr import evaluate_until
+from ..client_factory import API_VERSIONS, resolve_client
 from ..config import resolve_host
+from ..expr import evaluate_until
+from ..format import get_format, write_data
+from ..models import Measurement
+from ..storage import _setup_store
 
 _CHARS = ["▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"]
 
@@ -68,6 +68,9 @@ def power(
         "--alert-cooldown",
         help="Minimum seconds between alert dispatches",
     ),
+    db: str | None = typer.Option(
+        None, "--db", help="SQLite database path for historical storage"
+    ),
 ):
     """Display real-time power information."""
     asyncio.run(
@@ -87,6 +90,7 @@ def power(
             alert_webhook=alert_webhook,
             alert_cmd=alert_cmd,
             alert_cooldown=alert_cooldown,
+            db=db,
         )
     )
 
@@ -107,6 +111,7 @@ async def _power_async(
     alert_webhook: str | None = None,
     alert_cmd: str | None = None,
     alert_cooldown: float = 0.0,
+    db: str | None = None,
 ):
     console = Console()
     host = resolve_host(host)
@@ -137,12 +142,15 @@ async def _power_async(
     )
 
     async with client as c:
+        store, serial = await _setup_store(db, api_version, c)
         while True:
             if api_version == "v2":
-                m = await c.get_json_v2("/api/measurement", MeasurementV2)
-                data = convert_v2_measurement(m)
+                data = await c.get_json_v2("/api/measurement", Measurement)
             else:
-                data = await c.get_json("/api/v1/data", DataResponse)
+                data = await c.get_json("/api/v1/data", Measurement)
+
+            if store and serial:
+                store.append(data.model_dump(), serial)
 
             if sparkline:
                 values.append(data.active_power_w)

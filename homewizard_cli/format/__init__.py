@@ -1,7 +1,7 @@
 """Output formatters for homewizard-cli."""
 
 from collections.abc import Callable
-from enum import Enum
+from enum import StrEnum
 
 from rich.console import Console
 
@@ -17,7 +17,7 @@ from .table import write_table
 from .tsv import write_tsv
 
 
-class Format(str, Enum):
+class Format(StrEnum):
     """Output format options."""
 
     AUTO = "auto"
