@@ -1,9 +1,10 @@
 """homewizard-cli batteries command (API v2 only)."""
 
 import asyncio
-import json
 
 import typer
+
+from ..util import _dumps_json
 from rich.console import Console
 
 from ..client_v2 import P1ClientV2
@@ -46,7 +47,7 @@ async def _batteries_async(api_version, host, timeout, token, no_verify, mode):
         ) as c:
             if mode:
                 result = await c.put_json("/api/batteries", {"mode": mode})
-                console.print(f"Set mode to {mode}: {json.dumps(result)}")
+                console.print(f"Set mode to {mode}: {_dumps_json(result)}")
             else:
                 b = await c.get_json_v2("/api/batteries", BatteryState)
                 console.print(b.model_dump_json(indent=2))

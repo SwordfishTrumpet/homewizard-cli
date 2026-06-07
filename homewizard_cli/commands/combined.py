@@ -1,8 +1,9 @@
 """homewizard-cli combined command."""
 
 import asyncio
-import json
 from typing import Any
+
+from ..util import _dumps_json, _loads_json
 
 import typer
 from rich.console import Console
@@ -93,9 +94,9 @@ async def _combined_async(
             if isinstance(v, Exception):
                 out[k] = None
             elif isinstance(v, str):
-                out[k] = json.loads(v)
+                out[k] = _loads_json(v)
             elif hasattr(v, "model_dump"):
                 out[k] = v.model_dump(mode="json")
             else:
                 out[k] = v
-        console.print(json.dumps(out, indent=2, default=str))
+        console.print(_dumps_json(out, indent=True))

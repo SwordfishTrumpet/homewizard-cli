@@ -119,7 +119,7 @@ Supports both **API v1** (HTTP, port 80, no auth) and **API v2** (HTTPS, port 44
 
 - **Python 3.11 or later**
 - A HomeWizard P1 Meter on your local network
-- Firmware 3.x–4.x for API v1, or firmware 6.x+ for full API v2 support
+- Firmware 6.x+ (v1 supported on all firmware versions)
 
 ### Install from PyPI
 
@@ -1346,7 +1346,7 @@ v2 measurement data is automatically mapped to v1 field names via the unified `M
 | `--no-verify`     |       | `false`      | Disable SSL certificate verification (v2)          |
 | `--version`       |       |              | Show version and exit                              |
 
-**Host resolution priority:** CLI `--host` > config file `[default].host` > hardcoded fallback `192.168.68.109`
+**Host resolution priority:** CLI `--host` > config file `[default].host` > empty (must be configured)
 
 ---
 
@@ -1603,7 +1603,7 @@ Typed error hierarchy with distinct exit codes:
 | 8         | `UnsupportedError`   | Device does not support this feature   |
 | 10        | `SystemExit(10)`     | `--until` condition was met            |
 
-Commands automatically detect device capabilities (e.g., `telegram` on a P1 Meter, `state` on an Energy Socket). If a command is invoked on a device that does not support it, the CLI exits with code **8** and prints an informative message.
+Device capability detection is not yet implemented — commands do not validate device type before execution. If a command is invoked on a device that does not support it, the raw HTTP error is surfaced instead.
 
 All errors are caught at the entry point (`main.py`) and printed in red with their exit code.
 

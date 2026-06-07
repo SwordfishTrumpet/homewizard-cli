@@ -2,13 +2,13 @@
 
 import asyncio
 import contextlib
-import json
 from collections import deque
 
 import paho.mqtt.client as mqtt
 from rich.console import Console
 
 from homewizard_cli.models import DataResponse
+from homewizard_cli.util import _dumps_json
 
 
 def _parse_broker_url(broker: str) -> tuple[str, int]:
@@ -31,7 +31,7 @@ def write_mqtt(
     topic: str,
     qos: int = 0,
 ):
-    payload = json.dumps(data.model_dump(), indent=2, default=str)
+    payload = _dumps_json(data.model_dump(), indent=True)
     host, port = _parse_broker_url(broker)
 
     client = mqtt.Client()
@@ -91,7 +91,7 @@ class PersistentMqttClient:
             return False
 
     async def publish(self, data: DataResponse) -> bool:
-        payload = json.dumps(data.model_dump(), indent=2, default=str)
+        payload = _dumps_json(data.model_dump(), indent=True)
         success = await asyncio.to_thread(self._publish_sync, payload)
         if not success:
             self._buffer.append(payload)

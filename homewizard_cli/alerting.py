@@ -1,11 +1,12 @@
 """Alert action dispatcher for --alert-webhook, --alert-cmd, --alert-cooldown."""
 
 import asyncio
-import json
 import logging
 import os
 import time
 from datetime import UTC, datetime
+
+from .util import _dumps_json
 
 log = logging.getLogger(__name__)
 
@@ -70,7 +71,7 @@ class AlertDispatcher:
         env: dict[str, str] = {}
         env.update(os.environ)
         env["HW_CONDITION"] = payload["condition"]
-        env["HW_DATA"] = json.dumps(payload["data"])
+        env["HW_DATA"] = _dumps_json(payload["data"])
         try:
             proc = await asyncio.create_subprocess_shell(
                 cmd,

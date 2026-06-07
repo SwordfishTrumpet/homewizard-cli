@@ -1,9 +1,10 @@
 """homewizard-cli state command (API v2 only — Energy Socket)."""
 
 import asyncio
-import json
 
 import typer
+
+from ..util import _dumps_json
 from rich.console import Console
 
 from ..client_v2 import P1ClientV2
@@ -88,7 +89,7 @@ async def _state_async(
 
             if payload:
                 result = await c.put_json("/api/state", payload)
-                console.print(json.dumps(result, indent=2))
+                console.print(_dumps_json(result, indent=True))
             else:
                 s = await c.get_json_v2("/api/state", StateResponse)
                 console.print(s.model_dump_json(indent=2))

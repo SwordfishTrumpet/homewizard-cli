@@ -1,9 +1,10 @@
 """homewizard-cli hass command — Home Assistant discovery configuration."""
 
 import asyncio
-import json
 
 import typer
+
+from ..util import _dumps_json, _loads_json
 from rich.console import Console
 
 from ..client_factory import API_VERSIONS, resolve_client
@@ -108,10 +109,8 @@ async def _hass_async(
             await c.get_json_v2("/api/measurement", Measurement)
             await c.get_json_v2("/api/system", SystemV2)
         else:
-            import json as _json
-
             raw = await c.get("/api/")
-            device = DeviceInfoV2(**_json.loads(raw))
+            device = DeviceInfoV2(**_loads_json(raw))
 
     serial = device.serial or "unknown"
     device_cfg = {
@@ -138,7 +137,7 @@ async def _hass_async(
                 "device": device_cfg,
             }
             topic = f"homeassistant/sensor/{serial}/{field}/config"
-            console.print(json.dumps({"topic": topic, "payload": payload}, indent=2))
+            console.print(_dumps_json({"topic": topic, "payload": payload}, indent=True))
     else:
         sensors = []
         _protocol = "https" if api_version == "v2" else "http"
@@ -158,4 +157,4 @@ async def _hass_async(
                     "device": device_cfg,
                 }
             )
-        console.print(json.dumps({"sensor": sensors}, indent=2))
+        console.print(_dumps_json({"sensor": sensors}, indent=True))

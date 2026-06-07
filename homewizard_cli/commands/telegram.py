@@ -1,8 +1,9 @@
 """homewizard-cli telegram command."""
 
 import asyncio
-import json
 import time
+
+from ..util import _dumps_json
 from collections import deque
 
 import typer
@@ -146,7 +147,7 @@ async def _telegram_async(
                     parsed["obis"] = {
                         lookup_obis(k) or k: v for k, v in parsed["obis"].items()
                     }
-                output = json.dumps(parsed, indent=2, default=str)
+                output = _dumps_json(parsed, indent=True)
                 if rate:
                     output += f"\nRate: {rate_per_min:.1f} telegrams/minute"
                 console.print(output)

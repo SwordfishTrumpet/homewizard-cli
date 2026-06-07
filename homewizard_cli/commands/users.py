@@ -1,9 +1,10 @@
 """homewizard-cli users command (API v2 only)."""
 
 import asyncio
-import json
 
 import typer
+
+from ..util import _dumps_json, _loads_json
 from rich.console import Console
 from rich.table import Table
 
@@ -47,7 +48,7 @@ async def _users_list_async(api_version, host: str | None, timeout, token, no_ve
             host, timeout, token=token, verify_cert=not no_verify
         ) as c:
             result = await c.get("/api/user")
-            users = json.loads(result)
+            users = _loads_json(result)
             if isinstance(users, list):
                 t = Table(show_header=True, header_style="bold magenta")
                 t.add_column("Name", style="cyan")
@@ -92,7 +93,7 @@ async def _users_delete_async(
             host, timeout, token=token, verify_cert=not no_verify
         ) as c:
             result = await c.delete(f"/api/user?name={name}")
-            console.print(f"Deleted: {json.dumps(result)}")
+            console.print(f"Deleted: {_dumps_json(result)}")
     except P1Error as e:
         console.print(str(e), style="red")
         raise typer.Exit(code=e.code) from e

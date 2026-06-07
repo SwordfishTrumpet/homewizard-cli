@@ -1,9 +1,10 @@
 """homewizard-cli info command."""
 
 import asyncio
-import json
 
 import typer
+
+from ..util import _loads_json
 from rich.console import Console
 
 from ..client_factory import API_VERSIONS, resolve_client
@@ -77,9 +78,9 @@ async def _info_async(
             )
         else:
             raw = await c.get("/api/")
-            device = json.loads(raw)
+            device = _loads_json(raw)
             system_raw = await c.get("/api/v1/system")
-            system = json.loads(system_raw)
+            system = _loads_json(system_raw)
             data = await c.get_json("/api/v1/data", Measurement)
             console.print(f"Product:     {device.get('product_name', 'N/A')}")
             console.print(f"Type:        {device.get('product_type', 'N/A')}")

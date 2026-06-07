@@ -3,7 +3,6 @@
 import asyncio
 import contextlib
 import errno
-import json
 import os
 import signal
 from datetime import datetime
@@ -21,6 +20,7 @@ from ..format import Format, get_format, write_data
 from ..models import Measurement
 from ..state import DeltaTracker
 from ..storage import _setup_store
+from ..util import _dumps_json
 
 app = typer.Typer()
 
@@ -486,13 +486,13 @@ async def _export_async(
                             t.add_row(k, str(v))
                         console.print(t)
                     else:
-                        console.print(json.dumps(filtered, indent=2, default=str))
+                        console.print(_dumps_json(filtered, indent=True))
                     if file_handle:
                         from io import StringIO
 
                         buf = StringIO()
                         file_console = Console(file=buf, force_terminal=False)
-                        file_console.print(json.dumps(filtered, indent=2, default=str))
+                        file_console.print(_dumps_json(filtered, indent=True))
                         _safe_write(buf.getvalue())
                     if watch is not None:
                         with contextlib.suppress(TimeoutError):

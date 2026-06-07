@@ -1,8 +1,9 @@
 """homewizard-cli history command — retrospective queries."""
 
 import asyncio
-import json
 from datetime import datetime, timedelta
+
+from ..util import _dumps_json
 
 import typer
 from rich.console import Console
@@ -227,7 +228,7 @@ async def _history_async(
         if list_devices:
             devices = store.list_devices()
             if format == "json":
-                console.print(json.dumps(devices, indent=2))
+                console.print(_dumps_json(devices, indent=True))
             else:
                 t = Table(show_header=True, header_style="bold magenta")
                 t.add_column("Device Serial", style="cyan")
@@ -239,7 +240,7 @@ async def _history_async(
         if info:
             meta = store.info()
             if format == "json":
-                console.print(json.dumps(meta, indent=2))
+                console.print(_dumps_json(meta, indent=True))
             else:
                 console.print(f"Database:    {db}")
                 console.print(f"Size:        {_format_file_size(meta['file_size_bytes'])}")
@@ -297,7 +298,7 @@ async def _history_async(
             return
 
         if format == "json":
-            console.print(json.dumps(rows, indent=2, default=str))
+            console.print(_dumps_json(rows, indent=True))
         elif format == "csv":
             _print_csv(rows, console)
         elif format == "tsv":
@@ -361,7 +362,7 @@ def _run_comparison(
         return
 
     if format == "json":
-        console.print(json.dumps(comparison, indent=2, default=str))
+        console.print(_dumps_json(comparison, indent=True))
     else:
         t = Table(show_header=True, header_style="bold magenta")
         t.add_column("Field", style="cyan")

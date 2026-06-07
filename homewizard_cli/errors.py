@@ -1,6 +1,6 @@
 """Error types and exit codes for homewizard-cli."""
 
-import json
+from .util import _dumps_json
 
 
 class P1Error(Exception):
@@ -17,7 +17,7 @@ class P1Error(Exception):
         error_dict = {"error": self.message, "code": self.code}
         if self.details:
             error_dict["details"] = self.details
-        return json.dumps(error_dict)
+        return _dumps_json(error_dict)
 
     def __str__(self) -> str:
         if self.details:

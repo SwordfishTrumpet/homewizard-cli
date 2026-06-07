@@ -1,7 +1,6 @@
 """SQLite-backed measurement storage for homewizard-cli."""
 
 import contextlib
-import json
 import sqlite3
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -9,6 +8,7 @@ from types import UnionType
 from typing import Any, Union, get_args, get_origin
 
 from .models import Measurement
+from .util import _dumps_json, _loads_json
 
 
 def _sql_type(annotation: type | None) -> str:
@@ -121,7 +121,7 @@ class MeasurementStore:
                         external_list.append(item)
                     else:
                         external_list.append(str(item))
-                v = json.dumps(external_list, default=str)
+                v = _dumps_json(external_list)
             values[col] = v
         col_list = ", ".join(cols)
         placeholders = ", ".join(f":{c}" for c in cols)
@@ -240,8 +240,8 @@ class MeasurementStore:
         for row in rows:
             d = dict(row)
             if "external" in d and isinstance(d["external"], str):
-                with contextlib.suppress(json.JSONDecodeError, TypeError):
-                    d["external"] = json.loads(d["external"])
+                with contextlib.suppress(Exception):
+                    d["external"] = _loads_json(d["external"])
             result.append(d)
         return result
 
@@ -361,10 +361,8 @@ async def _fetch_device_serial(client: Any, api_version: str) -> str | None:
             info = await client.get_json_v2("/api", DeviceInfoV2)
             return info.serial or None
         else:
-            import json
-
             text = await client.get("/api/")
-            raw = json.loads(text)
+            raw = _loads_json(text)
             return raw.get("serial") or None
     except Exception:
         return None

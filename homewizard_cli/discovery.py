@@ -1,8 +1,9 @@
 """Device discovery for HomeWizard P1 Meter."""
 
 import asyncio
-import json
 from datetime import datetime, timedelta
+
+from .util import _dumps_json, _loads_json
 from pathlib import Path
 
 import httpx
@@ -21,11 +22,11 @@ def _get_cache() -> str | None:
         return None
 
     try:
-        data = json.loads(CACHE_FILE.read_text())
+        data = _loads_json(CACHE_FILE.read_text())
         timestamp = datetime.fromisoformat(data["timestamp"])
         if datetime.now() - timestamp < CACHE_TTL:
             return data["host"]
-    except (json.JSONDecodeError, KeyError, ValueError):
+    except (KeyError, ValueError):
         pass
     return None
 
@@ -37,7 +38,7 @@ def _save_cache(host: str):
         "host": host,
         "timestamp": datetime.now().isoformat(),
     }
-    CACHE_FILE.write_text(json.dumps(data))
+    CACHE_FILE.write_text(_dumps_json(data))
 
 
 class _HostListener(ServiceListener):

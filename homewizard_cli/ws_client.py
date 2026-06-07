@@ -1,12 +1,12 @@
 """WebSocket client for HomeWizard API v2 real-time push updates."""
 
 import asyncio
-import json
 import ssl
 from pathlib import Path
 from typing import Any
 
 from .errors import P1Error
+from .util import _loads_json
 
 CA_CERT_PATH = Path.home() / ".config" / "homewizard-cli" / "homewizard-ca.pem"
 
@@ -73,7 +73,7 @@ class WebSocketClient:
             message = await asyncio.wait_for(self._ws.recv(), timeout=self.timeout)
             if isinstance(message, bytes):
                 message = message.decode("utf-8")
-            return json.loads(message)
+            return _loads_json(message)
         except TimeoutError:
             return None
 

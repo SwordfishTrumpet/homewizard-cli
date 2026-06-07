@@ -15,7 +15,7 @@ def test_p1_error_base():
     err = P1Error("test error", code=5)
     assert err.code == 5
     assert err.message == "test error"
-    assert err.to_json() == '{"error": "test error", "code": 5}'
+    assert err.to_json() == '{"error":"test error","code":5}'
 
 
 def test_p1_error_with_details():
@@ -59,7 +59,7 @@ def test_unsupported_error():
     err = UnsupportedError("Device does not support this feature")
     assert err.code == 8
     assert (
-        err.to_json() == '{"error": "Device does not support this feature", "code": 8}'
+        err.to_json() == '{"error":"Device does not support this feature","code":8}'
     )
 
 

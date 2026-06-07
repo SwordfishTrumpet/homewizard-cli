@@ -1,7 +1,6 @@
 """homewizard-cli data command."""
 
 import asyncio
-import json
 
 import typer
 from rich.console import Console
@@ -16,6 +15,7 @@ from ..jsonpath import query_jsonpath
 from ..models import Measurement
 from ..state import Aggregator, DeltaTracker
 from ..storage import _setup_store
+from ..util import _dumps_json
 from ..ws_client import WebSocketClient
 
 
@@ -130,7 +130,7 @@ def _handle_agg_output(
     agg_dict = aggregator.update(d.model_dump())
     if agg_dict:
         merged = {**d.model_dump(), **agg_dict}
-        console.print(json.dumps(merged, indent=2, default=str))
+        console.print(_dumps_json(merged, indent=True))
         return True
     return False
 
@@ -152,7 +152,7 @@ def _handle_data_output(
     """
     if query:
         result = query_jsonpath(d.model_dump(), query)
-        console.print(json.dumps(result, indent=2, default=str))
+        console.print(_dumps_json(result, indent=True))
         return True
 
     if delta and tracker is not None:
@@ -180,7 +180,7 @@ def _handle_data_output(
                 t.add_row(k, str(v))
             console.print(t)
         else:
-            console.print(json.dumps(filtered, indent=2, default=str))
+            console.print(_dumps_json(filtered, indent=True))
         return True
 
     if template:
