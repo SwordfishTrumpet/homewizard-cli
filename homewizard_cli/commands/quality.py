@@ -9,7 +9,6 @@ from rich.console import Console
 from ..client_factory import API_VERSIONS, resolve_client
 from ..config import load_config, resolve_host
 from ..models import Measurement
-from ..models.v2 import TelegramV2
 from ..util import format_p1_timestamp
 
 app = typer.Typer()
@@ -188,8 +187,7 @@ async def _quality_async(
             if show_events:
                 try:
                     if api_version == "v2":
-                        t = await c.get_json_v2("/api/telegram", TelegramV2)
-                        raw = t.telegram
+                        raw = await c.get("/api/telegram")
                     else:
                         raw = await c.get("/api/v1/telegram")
                     event_log = _parse_events_from_telegram(raw)

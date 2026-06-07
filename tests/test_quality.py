@@ -12,7 +12,6 @@ from homewizard_cli.commands.quality import (
 )
 from homewizard_cli.main import app
 from homewizard_cli.models import Measurement
-from homewizard_cli.models.v2 import TelegramV2
 
 runner = CliRunner()
 
@@ -26,13 +25,17 @@ def _make_client_mock(measurement: Measurement, telegram: str | None = None):
     async def mock_get_json_v2(endpoint, model):
         if endpoint == "/api/measurement":
             return measurement
-        elif endpoint == "/api/telegram":
+        raise Exception(f"unexpected endpoint: {endpoint}")
+
+    async def mock_get(endpoint):
+        if endpoint == "/api/telegram":
             if telegram is not None:
-                return TelegramV2(telegram=telegram)
+                return telegram
             raise Exception("no telegram mock")
         raise Exception(f"unexpected endpoint: {endpoint}")
 
     client.get_json_v2 = AsyncMock(side_effect=mock_get_json_v2)
+    client.get = AsyncMock(side_effect=mock_get)
     return client
 
 
@@ -495,13 +498,8 @@ def test_quality_cli_events_fetch_error():
     client = AsyncMock()
     client.__aenter__ = AsyncMock(return_value=client)
     client.__aexit__ = AsyncMock(return_value=False)
-    client.get_json_v2 = AsyncMock(
-        side_effect=lambda endpoint, model: (
-            measurement
-            if endpoint == "/api/measurement"
-            else (_ for _ in ()).throw(RuntimeError("telegram fail"))
-        )
-    )
+    client.get_json_v2 = AsyncMock(return_value=measurement)
+    client.get = AsyncMock(side_effect=RuntimeError("telegram fail"))
     with patch("homewizard_cli.commands.quality.resolve_client", return_value=client):
         result = runner.invoke(app, ["quality", "--events", "--api-version", "v2"])
     assert result.exit_code == 0

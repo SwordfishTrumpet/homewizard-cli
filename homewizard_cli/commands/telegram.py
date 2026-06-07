@@ -10,7 +10,6 @@ from rich.console import Console
 
 from ..client_factory import API_VERSIONS, resolve_client
 from ..config import resolve_host
-from ..models.v2 import TelegramV2
 from ..obis import lookup_obis
 from ..util import _crc16
 
@@ -107,11 +106,7 @@ async def _telegram_async(
     async with client as c:
         while True:
             try:
-                if api_version == "v2":
-                    t = await c.get_json_v2(endpoint, TelegramV2)
-                    raw = t.telegram
-                else:
-                    raw = await c.get(endpoint)
+                raw = await c.get(endpoint)
             except Exception as e:
                 console.print(f"Error fetching telegram: {e}", style="red")
                 if watch is None:

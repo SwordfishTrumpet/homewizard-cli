@@ -14,7 +14,6 @@ from homewizard_cli.commands.telegram import (
     _validate_and_print,
 )
 from homewizard_cli.main import app
-from homewizard_cli.models.v2 import TelegramV2
 from homewizard_cli.util import _crc16
 
 runner = CliRunner()
@@ -34,10 +33,7 @@ def _make_client_mock(telegram: str, api_version: str = "v2"):
     client = AsyncMock()
     client.__aenter__ = AsyncMock(return_value=client)
     client.__aexit__ = AsyncMock(return_value=False)
-    if api_version == "v2":
-        client.get_json_v2 = AsyncMock(return_value=TelegramV2(telegram=telegram))
-    else:
-        client.get = AsyncMock(return_value=telegram)
+    client.get = AsyncMock(return_value=telegram)
     return client
 
 
@@ -404,17 +400,17 @@ def test_telegram_cli_watch_new_telegram():
 
     call_count = 0
 
-    async def mock_get_json_v2(endpoint, model):
+    async def mock_get(endpoint):
         nonlocal call_count
         call_count += 1
         if call_count == 1:
-            return TelegramV2(telegram=raw1)
-        return TelegramV2(telegram=raw2)
+            return raw1
+        return raw2
 
     client = AsyncMock()
     client.__aenter__ = AsyncMock(return_value=client)
     client.__aexit__ = AsyncMock(return_value=False)
-    client.get_json_v2 = AsyncMock(side_effect=mock_get_json_v2)
+    client.get = AsyncMock(side_effect=mock_get)
 
     sleep_calls = 0
 
@@ -467,14 +463,14 @@ def test_telegram_cli_fetch_error_watch():
 
     call_count = 0
 
-    async def mock_get_json_v2(endpoint, model):
+    async def mock_get(endpoint):
         nonlocal call_count
         call_count += 1
         if call_count == 1:
             raise RuntimeError("fetch failed")
-        return TelegramV2(telegram="/TEST\n!0000")
+        return "/TEST\n!0000"
 
-    client.get_json_v2 = AsyncMock(side_effect=mock_get_json_v2)
+    client.get = AsyncMock(side_effect=mock_get)
 
     sleep_calls = 0
 
@@ -557,7 +553,7 @@ async def test_telegram_async_watch_obis_found():
         )
 
     assert sleep_calls == 1
-    assert client.get_json_v2.call_count == 1
+    assert client.get.call_count == 1
 
 
 async def test_telegram_async_watch_obis_not_found():
@@ -598,4 +594,4 @@ async def test_telegram_async_watch_obis_not_found():
         )
 
     assert sleep_calls == 1
-    assert client.get_json_v2.call_count == 1
+    assert client.get.call_count == 1

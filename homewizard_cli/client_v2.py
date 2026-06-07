@@ -2,6 +2,7 @@
 
 import asyncio
 import contextlib
+import logging
 import ssl
 from pathlib import Path
 from typing import TypeVar
@@ -12,6 +13,8 @@ from pydantic import BaseModel
 from .cacert import HOMEWIZARD_CA_CERT
 from .client import _get_proxy_url
 from .errors import HttpError, TimeoutError
+
+log = logging.getLogger(__name__)
 
 _MAX_BACKOFF = 8.0
 
@@ -56,6 +59,8 @@ class P1ClientV2:
         self.timeout = timeout
         self.token = token
         self.identifier = identifier
+        if not verify_cert:
+            log.warning("SSL verification disabled — connections are insecure.")
         proxy_url = _get_proxy_url(proxy, host)
         ssl_ctx = _create_ssl_context(verify_cert, identifier=identifier)
         headers = {"X-Api-Version": "2"}
@@ -115,6 +120,8 @@ class P1ClientV2:
             try:
                 resp = await self._client.put(path, json=data)
                 resp.raise_for_status()
+                if resp.status_code == 204:
+                    return {}
                 return resp.json()
             except httpx.TimeoutException:
                 last_error = TimeoutError(self.timeout)
@@ -138,6 +145,8 @@ class P1ClientV2:
             try:
                 resp = await self._client.post(path, json=data)
                 resp.raise_for_status()
+                if resp.status_code == 204:
+                    return {}
                 return resp.json()
             except httpx.TimeoutException:
                 last_error = TimeoutError(self.timeout)
@@ -161,6 +170,8 @@ class P1ClientV2:
             try:
                 resp = await self._client.delete(path)
                 resp.raise_for_status()
+                if resp.status_code == 204:
+                    return {}
                 return resp.json()
             except httpx.TimeoutException:
                 last_error = TimeoutError(self.timeout)
