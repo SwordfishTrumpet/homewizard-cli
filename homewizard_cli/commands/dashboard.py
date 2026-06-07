@@ -181,3 +181,6 @@ async def _dashboard_async(
                     pass
         except KeyboardInterrupt:
             pass
+        finally:
+            if store:
+                store.close()

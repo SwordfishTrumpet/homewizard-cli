@@ -2,6 +2,7 @@
 
 from .client import P1Client
 from .client_v2 import P1ClientV2
+from .config import load_config
 from .models import Measurement
 from .models.v2 import MeasurementV2
 
@@ -16,8 +17,25 @@ def resolve_client(
     verify_cert: bool = True,
     proxy: str | None = None,
 ) -> P1Client | P1ClientV2:
-    """Return the appropriate client for the given API version."""
+    """Return the appropriate client for the given API version.
+    
+    Falls back to config file values for token and no_verify.
+    SSL Safety: v2 with --no-verify requires --token to prevent
+    insecure unauthenticated connections.
+    """
     if api_version == "v2":
+        cfg = load_config()
+        if token is None and cfg.token:
+            token = cfg.token
+        if verify_cert and cfg.no_verify:
+            verify_cert = False
+        if not verify_cert and token is None:
+            import sys
+            sys.exit(
+                "Error: --no-verify requires --token on API v2.\n"
+                "  SSL verification disabled but no auth token provided.\n"
+                "  Either provide --token or remove --no-verify."
+            )
         return P1ClientV2(
             host, timeout, token=token, verify_cert=verify_cert, proxy=proxy
         )

@@ -223,87 +223,89 @@ async def _history_async(
     console = Console()
 
     store = MeasurementStore(db)
+    try:
+        if list_devices:
+            devices = store.list_devices()
+            if format == "json":
+                console.print(json.dumps(devices, indent=2))
+            else:
+                t = Table(show_header=True, header_style="bold magenta")
+                t.add_column("Device Serial", style="cyan")
+                for d in devices:
+                    t.add_row(d)
+                console.print(t)
+            return
 
-    if list_devices:
-        devices = store.list_devices()
-        if format == "json":
-            console.print(json.dumps(devices, indent=2))
-        else:
-            t = Table(show_header=True, header_style="bold magenta")
-            t.add_column("Device Serial", style="cyan")
-            for d in devices:
-                t.add_row(d)
-            console.print(t)
-        return
+        if info:
+            meta = store.info()
+            if format == "json":
+                console.print(json.dumps(meta, indent=2))
+            else:
+                console.print(f"Database:    {db}")
+                console.print(f"Size:        {_format_file_size(meta['file_size_bytes'])}")
+                console.print(f"Rows:        {meta['row_count']:,}")
+                devices_str = ", ".join(meta["devices"]) if meta["devices"] else "none"
+                console.print(f"Devices:     {len(meta['devices'])} ({devices_str})")
+                start_str = meta["date_start"] or "\u2014"
+                end_str = meta["date_end"] or "\u2014"
+                console.print(f"Date range:  {start_str} .. {end_str}")
+                console.print(f"Completeness: {meta['completeness_pct']}%")
+            return
 
-    if info:
-        meta = store.info()
-        if format == "json":
-            console.print(json.dumps(meta, indent=2))
-        else:
-            console.print(f"Database:    {db}")
-            console.print(f"Size:        {_format_file_size(meta['file_size_bytes'])}")
-            console.print(f"Rows:        {meta['row_count']:,}")
-            devices_str = ", ".join(meta["devices"]) if meta["devices"] else "none"
-            console.print(f"Devices:     {len(meta['devices'])} ({devices_str})")
-            start_str = meta["date_start"] or "\u2014"
-            end_str = meta["date_end"] or "\u2014"
-            console.print(f"Date range:  {start_str} .. {end_str}")
-            console.print(f"Completeness: {meta['completeness_pct']}%")
-        return
+        if vacuum:
+            store.vacuum()
+            console.print("Database vacuumed.", style="green")
+            return
 
-    if vacuum:
-        store.vacuum()
-        console.print("Database vacuumed.", style="green")
-        return
+        field_list: list[str] | None = None
+        if fields:
+            field_list = [f.strip() for f in fields.split(",")]
 
-    field_list: list[str] | None = None
-    if fields:
-        field_list = [f.strip() for f in fields.split(",")]
-
-    start, end = _get_time_range(
-        yesterday=yesterday,
-        today=today,
-        this_week=this_week,
-        this_month=this_month,
-        range_opt=range_opt,
-        since_last=since_last,
-        store=store,
-    )
-
-    top_n: int | None = None
-    if top is not None:
-        top_n = top
-    elif bottom is not None:
-        top_n = -bottom
-
-    if compare:
-        _run_comparison(
-            store, start, end, compare, field_list, device_id, format, console, db
+        start, end = _get_time_range(
+            yesterday=yesterday,
+            today=today,
+            this_week=this_week,
+            this_month=this_month,
+            range_opt=range_opt,
+            since_last=since_last,
+            store=store,
         )
-        return
 
-    rows = store.query(
-        start=start,
-        end=end,
-        fields=field_list,
-        agg=agg,
-        device_serial=device_id,
-        top_n=top_n,
-    )
+        top_n: int | None = None
+        if top is not None:
+            top_n = top
+        elif bottom is not None:
+            top_n = -bottom
 
-    if not rows:
-        console.print("No data found.", style="yellow")
-        return
+        if compare:
+            _run_comparison(
+                store, start, end, compare, field_list, device_id, format, console, db
+            )
+            return
 
-    if format == "json":
-        console.print(json.dumps(rows, indent=2, default=str))
-    elif format == "csv":
-        _print_csv(rows, console)
-    elif format == "tsv":
-        _print_tsv(rows, console)
-    else:
-        _print_table(rows, console)
+        rows = store.query(
+            start=start,
+            end=end,
+            fields=field_list,
+            agg=agg,
+            device_serial=device_id,
+            top_n=top_n,
+        )
+
+        if not rows:
+            console.print("No data found.", style="yellow")
+            return
+
+        if format == "json":
+            console.print(json.dumps(rows, indent=2, default=str))
+        elif format == "csv":
+            _print_csv(rows, console)
+        elif format == "tsv":
+            _print_tsv(rows, console)
+        else:
+            _print_table(rows, console)
+    finally:
+        store.close()
 
 
 def _run_comparison(

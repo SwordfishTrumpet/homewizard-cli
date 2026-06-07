@@ -365,7 +365,10 @@ def test_cost_watch_mode():
     client.get_json_v2 = mock_get_json_v2
 
     with patch("homewizard_cli.commands.cost.resolve_client", return_value=client):
-        with patch("time.sleep", side_effect=RuntimeError("stop")):
+        with patch(
+            "homewizard_cli.commands.cost.asyncio.sleep",
+            side_effect=RuntimeError("stop"),
+        ):
             with pytest.raises(RuntimeError, match="stop"):
                 asyncio.run(
                     _cost_async(

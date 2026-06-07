@@ -111,10 +111,11 @@ def test_pid_is_alive_nonexistent():
 def test_pid_is_alive_negative():
     # Some systems treat negative PIDs differently.
     # We just verify it doesn't crash.
+    result: bool = False
     try:
         result = _pid_is_alive(-1)
     except OSError:
-        result = False  # type: ignore[unreachable]
+        pass
     assert isinstance(result, bool)
 
 

@@ -28,7 +28,7 @@ def _create_app(
     token: str | None = None,
     no_verify: bool = False,
 ) -> Any:
-    from fastapi import FastAPI  # type: ignore[import-not-found]  # noqa: F811
+    from fastapi import FastAPI
 
     fastapi_app = FastAPI(title="homewizard-cli Proxy")
     _cache: dict[str, tuple[float, Any]] = {}
@@ -150,7 +150,7 @@ async def _serve_async(
         console.print(f"P1 Meter at {host} \u2014 FAIL: {e}", style="red")
         raise typer.Exit(code=2) from e
 
-    import uvicorn  # type: ignore[import-not-found]
+    import uvicorn
 
     app_instance = _create_app(
         host,

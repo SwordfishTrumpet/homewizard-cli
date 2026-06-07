@@ -8,7 +8,7 @@ from rich.console import Console
 from rich.table import Table
 
 from ..client_v2 import P1ClientV2
-from ..config import resolve_host
+from ..config import resolve_host, resolve_no_verify, resolve_token
 from ..errors import P1Error, UnsupportedError
 
 app = typer.Typer()
@@ -40,6 +40,8 @@ async def _users_list_async(api_version, host: str | None, timeout, token, no_ve
         raise UnsupportedError("This command only supports API v2")
     console = Console()
     host = resolve_host(host)
+    token = resolve_token(token)
+    no_verify = resolve_no_verify(no_verify)
     try:
         async with P1ClientV2(
             host, timeout, token=token, verify_cert=not no_verify
@@ -83,6 +85,8 @@ async def _users_delete_async(
         raise UnsupportedError("This command only supports API v2")
     console = Console()
     host = resolve_host(host)
+    token = resolve_token(token)
+    no_verify = resolve_no_verify(no_verify)
     try:
         async with P1ClientV2(
             host, timeout, token=token, verify_cert=not no_verify

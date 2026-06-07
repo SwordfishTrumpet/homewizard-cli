@@ -8,8 +8,9 @@ from rich.console import Console
 from homewizard_cli.models import DataResponse
 
 
-def _console():
-    return Console(file=StringIO(), force_terminal=False, width=9999)
+def _console() -> tuple[Console, StringIO]:
+    buf = StringIO()
+    return Console(file=buf, force_terminal=False, width=9999), buf
 
 
 def basic_data(**overrides: Any) -> DataResponse:
@@ -32,7 +33,7 @@ def basic_data(**overrides: Any) -> DataResponse:
         "gas_unique_id": "gas123",
     }
     defaults.update(overrides)
-    return DataResponse(**defaults)  # type: ignore[arg-type]
+    return DataResponse.model_validate(defaults)
 
 
 def full_3phase_data() -> DataResponse:
@@ -88,49 +89,49 @@ def full_3phase_data() -> DataResponse:
 def test_snapshot_json_basic(snapshot):
     from homewizard_cli.format.json import write_json
 
-    c = _console()
+    c, _buf = _console()
     write_json(basic_data(), c)
-    assert c.file.getvalue() == snapshot  # type: ignore[union-attr]
+    assert _buf.getvalue() == snapshot
 
 
 def test_snapshot_prometheus_basic(snapshot):
     from homewizard_cli.format.prometheus import write_prometheus
 
-    c = _console()
+    c, _buf = _console()
     write_prometheus(basic_data(), c)
-    assert c.file.getvalue() == snapshot  # type: ignore[union-attr]
+    assert _buf.getvalue() == snapshot
 
 
 def test_snapshot_env_basic(snapshot):
     from homewizard_cli.format.env import write_env
 
-    c = _console()
+    c, _buf = _console()
     write_env(basic_data(), c)
-    assert c.file.getvalue() == snapshot  # type: ignore[union-attr]
+    assert _buf.getvalue() == snapshot
 
 
 def test_snapshot_minimal_basic(snapshot):
     from homewizard_cli.format.minimal import write_minimal
 
-    c = _console()
+    c, _buf = _console()
     write_minimal(basic_data(), c)
-    assert c.file.getvalue() == snapshot  # type: ignore[union-attr]
+    assert _buf.getvalue() == snapshot
 
 
 def test_snapshot_raw_basic(snapshot):
     from homewizard_cli.format.raw import write_raw
 
-    c = _console()
+    c, _buf = _console()
     write_raw(basic_data(), c)
-    assert c.file.getvalue() == snapshot  # type: ignore[union-attr]
+    assert _buf.getvalue() == snapshot
 
 
 def test_snapshot_table_basic(snapshot):
     from homewizard_cli.format.table import write_table
 
-    c = _console()
+    c, _buf = _console()
     write_table(basic_data(), c)
-    assert c.file.getvalue() == snapshot  # type: ignore[union-attr]
+    assert _buf.getvalue() == snapshot
 
 
 # ── Snapshot tests: 3-phase data ──────────────────────────────
@@ -139,54 +140,54 @@ def test_snapshot_table_basic(snapshot):
 def test_snapshot_json_3phase(snapshot):
     from homewizard_cli.format.json import write_json
 
-    c = _console()
+    c, _buf = _console()
     write_json(full_3phase_data(), c)
-    assert c.file.getvalue() == snapshot  # type: ignore[union-attr]
+    assert _buf.getvalue() == snapshot
 
 
 def test_snapshot_prometheus_3phase(snapshot):
     from homewizard_cli.format.prometheus import write_prometheus
 
-    c = _console()
+    c, _buf = _console()
     write_prometheus(full_3phase_data(), c)
-    assert c.file.getvalue() == snapshot  # type: ignore[union-attr]
+    assert _buf.getvalue() == snapshot
 
 
 def test_snapshot_raw_3phase(snapshot):
     from homewizard_cli.format.raw import write_raw
 
-    c = _console()
+    c, _buf = _console()
     write_raw(full_3phase_data(), c)
-    assert c.file.getvalue() == snapshot
+    assert _buf.getvalue() == snapshot
 
 
 def test_snapshot_table_no_gas(snapshot):
     from homewizard_cli.format.table import write_table
 
-    c = _console()
+    c, _buf = _console()
     write_table(basic_data(total_gas_m3=None), c)
-    assert c.file.getvalue() == snapshot
+    assert _buf.getvalue() == snapshot
 
 
 def test_snapshot_json_no_gas(snapshot):
     from homewizard_cli.format.json import write_json
 
-    c = _console()
+    c, _buf = _console()
     write_json(basic_data(total_gas_m3=None), c)
-    assert c.file.getvalue() == snapshot
+    assert _buf.getvalue() == snapshot
 
 
 def test_snapshot_raw_tariff_t2(snapshot):
     from homewizard_cli.format.raw import write_raw
 
-    c = _console()
+    c, _buf = _console()
     write_raw(basic_data(active_tariff=2), c)
-    assert c.file.getvalue() == snapshot
+    assert _buf.getvalue() == snapshot
 
 
 def test_snapshot_env_all_optional_present(snapshot):
     from homewizard_cli.format.env import write_env
 
-    c = _console()
+    c, _buf = _console()
     write_env(full_3phase_data(), c)
-    assert c.file.getvalue() == snapshot  # type: ignore[union-attr]
+    assert _buf.getvalue() == snapshot

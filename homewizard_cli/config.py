@@ -62,6 +62,8 @@ class Config:
     timeout: float | None = None
     format: str | None = None
     timestamp_format: str | None = None
+    token: str | None = None
+    no_verify: bool | None = None
     export: ExportConfig | None = None
     tariffs: TariffConfig | None = None
 
@@ -115,6 +117,8 @@ def load_config() -> Config:
             timeout=default.get("timeout"),
             format=default.get("format"),
             timestamp_format=default.get("timestamp_format"),
+            token=default.get("token"),
+            no_verify=default.get("no_verify"),
             export=_load_export_config(data),
             tariffs=_load_tariff_config(data),
         )
@@ -147,6 +151,10 @@ def validate_config() -> list[str]:
         default["timestamp_format"], str
     ):
         issues.append("default.timestamp_format must be a string")
+    if "token" in default and not isinstance(default["token"], str):
+        issues.append("default.token must be a string")
+    if "no_verify" in default and not isinstance(default["no_verify"], bool):
+        issues.append("default.no_verify must be a boolean")
 
     export_data = data.get("export", {})
     if export_data:
@@ -175,3 +183,23 @@ def resolve_host(host: str | None) -> str:
         return host
     cfg = load_config()
     return cfg.host or DEFAULT_HOST
+
+
+def resolve_token(token: str | None) -> str | None:
+    """Return token from CLI arg or config file."""
+    if token is not None:
+        return token
+    cfg = load_config()
+    return cfg.token
+
+
+def resolve_no_verify(no_verify: bool) -> bool:
+    """Return whether to skip SSL verification from CLI arg or config.
+    
+    If the CLI arg is False (default), falls back to config file.
+    If the CLI arg is True, respects the explicit choice.
+    """
+    if no_verify:
+        return True
+    cfg = load_config()
+    return bool(cfg.no_verify)

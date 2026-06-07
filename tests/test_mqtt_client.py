@@ -32,8 +32,9 @@ def data() -> DataResponse:
     )
 
 
-def _console():
-    return Console(file=StringIO(), force_terminal=False, width=9999)
+def _console() -> tuple[Console, StringIO]:
+    buf = StringIO()
+    return Console(file=buf, force_terminal=False, width=9999), buf
 
 
 # ── _parse_broker_url ──────────────────────────────────────────
@@ -85,10 +86,10 @@ def test_write_mqtt_prints_payload_even_on_connect_failure():
         mock_client.connect.side_effect = OSError("Connection refused")
         mock_client_cls.return_value = mock_client
 
-        c = _console()
+        c, _buf = _console()
         write_mqtt(data(), c, broker="localhost:1883", topic="test/topic")
 
-        out = c.file.getvalue()  # type: ignore[union-attr]
+        out = _buf.getvalue()
         assert "MQTT error" in out
 
 
@@ -97,10 +98,10 @@ def test_write_mqtt_success_prints_payload():
         mock_client = MagicMock()
         mock_client_cls.return_value = mock_client
 
-        c = _console()
+        c, _buf = _console()
         write_mqtt(data(), c, broker="localhost:1883", topic="test/topic")
 
-        out = c.file.getvalue()  # type: ignore[union-attr]
+        out = _buf.getvalue()
         # payload is multi-line pretty JSON, parse all lines
         payload = json.loads(out.strip())
         assert payload["active_power_w"] == 500.0

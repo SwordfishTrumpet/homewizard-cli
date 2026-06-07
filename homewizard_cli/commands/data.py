@@ -307,22 +307,42 @@ async def _data_async(
     )
     async with client as c:
         store, serial = await _setup_store(db, api_version, c)
-        while True:
-            if api_version == "v2":
-                d = await c.get_json_v2("/api/measurement", Measurement)
-            else:
-                d = await c.get_json("/api/v1/data", Measurement)
+        try:
+            while True:
+                if api_version == "v2":
+                    d = await c.get_json_v2("/api/measurement", Measurement)
+                else:
+                    d = await c.get_json("/api/v1/data", Measurement)
 
-            if store and serial:
-                store.append(d.model_dump(), serial)
+                if store and serial:
+                    store.append(d.model_dump(), serial)
 
-            if until and evaluate_until(d.model_dump(), until):
-                console.print(f"Condition met: {until}", style="green")
-                if dispatcher.configured:
-                    await dispatcher.dispatch(until, d.model_dump())
-                if watch is None or not dispatcher.configured:
-                    raise typer.Exit(code=10)
-                _handle_data_output(
+                if until and evaluate_until(d.model_dump(), until):
+                    console.print(f"Condition met: {until}", style="green")
+                    if dispatcher.configured:
+                        await dispatcher.dispatch(until, d.model_dump())
+                    if watch is None or not dispatcher.configured:
+                        raise typer.Exit(code=10)
+                    _handle_data_output(
+                        d,
+                        query=query,
+                        delta=delta,
+                        tracker=tracker,
+                        fields=fields,
+                        template=template,
+                        output_format=output_format,
+                        console=console,
+                    )
+                    await asyncio.sleep(watch)
+                    continue
+
+                if _handle_agg_output(d, aggregator, console):
+                    if watch is None:
+                        return
+                    await asyncio.sleep(watch)
+                    continue
+
+                should_stop = _handle_data_output(
                     d,
                     query=query,
                     delta=delta,
@@ -332,32 +352,16 @@ async def _data_async(
                     output_format=output_format,
                     console=console,
                 )
-                await asyncio.sleep(watch)
-                continue
+                if should_stop:
+                    if watch is None:
+                        return
+                    await asyncio.sleep(watch)
+                    continue
 
-            if _handle_agg_output(d, aggregator, console):
                 if watch is None:
-                    return
+                    break
+
                 await asyncio.sleep(watch)
-                continue
-
-            should_stop = _handle_data_output(
-                d,
-                query=query,
-                delta=delta,
-                tracker=tracker,
-                fields=fields,
-                template=template,
-                output_format=output_format,
-                console=console,
-            )
-            if should_stop:
-                if watch is None:
-                    return
-                await asyncio.sleep(watch)
-                continue
-
-            if watch is None:
-                break
-
-            await asyncio.sleep(watch)
+        finally:
+            if store:
+                store.close()

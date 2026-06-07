@@ -4,7 +4,7 @@
   <img src="https://img.shields.io/github/license/SwordfishTrumpet/homewizard-cli?label=License" alt="MIT License">
   <img src="https://img.shields.io/badge/code%20style-ruff-blueviolet" alt="Ruff">
   <img src="https://img.shields.io/badge/types-pydantic%20v2-aa4488" alt="Pydantic v2">
-  <img src="https://img.shields.io/badge/coverage-92%25-brightgreen" alt="Coverage 92%">
+  <img src="https://img.shields.io/badge/coverage-90%25-brightgreen" alt="Coverage 90%">
 </p>
 
 **A high-performance, feature-complete CLI for the HomeWizard P1 Meter.** Read real-time and cumulative energy data, monitor power quality, access raw DSMR telegrams, export to third-party systems (InfluxDB, MQTT, Prometheus, CSV/JSON), serve a REST proxy, view a live TUI dashboard, and manage device settings — all from the command line.
@@ -97,18 +97,16 @@ Supports both **API v1** (HTTP, port 80, no auth) and **API v2** (HTTPS, port 44
 
 ## Architecture & Tech Stack
 
-| Component            | Library                   | Purpose                            |
-|----------------------|---------------------------|------------------------------------|
 | Component            | Library                   | Version | Purpose                            |
 |----------------------|---------------------------|---------|------------------------------------|
-| CLI framework        | [Typer](https://typer.tiangolo.com/) | 0.26+ | Command routing, shell completions |
-| HTTP client          | [httpx](https://www.python-httpx.org/) | 0.28+ | Async HTTP/HTTPS requests          |
-| Data models          | [Pydantic](https://docs.pydantic.dev/) | 2.13+ | Response validation, v1↔v2 mapping |
-| Terminal output      | [Rich](https://rich.readthedocs.io/) | 15+ | Tables, panels, colors, sparklines |
-| mDNS discovery       | [python-zeroconf](https://github.com/python-zeroconf/python-zeroconf) | 0.149+ | Network device discovery |
+| CLI framework        | [Typer](https://typer.tiangolo.com/) | 0.26.7+ | Command routing, shell completions |
+| HTTP client          | [httpx](https://www.python-httpx.org/) | 0.28.1+ | Async HTTP/HTTPS requests          |
+| Data models          | [Pydantic](https://docs.pydantic.dev/) | 2.13.4+ | Response validation, v1↔v2 mapping |
+| Terminal output      | [Rich](https://rich.readthedocs.io/) | 15.0.0+ | Tables, panels, colors, sparklines |
+| mDNS discovery       | [python-zeroconf](https://github.com/python-zeroconf/python-zeroconf) | 0.149.16+ | Network device discovery |
 | Config parsing       | `tomllib` (stdlib)        | — | TOML config file parsing           |
 | Optional: WebSocket  | [websockets](https://websockets.readthedocs.io/) | 16+ | Real-time data push (v2)  |
-| Optional: REST proxy | [FastAPI](https://fastapi.tiangolo.com/) + [uvicorn](https://www.uvicorn.org/) | 0.136+ / 0.48+ | HTTP proxy server for `/api/*` |
+| Optional: REST proxy | [FastAPI](https://fastapi.tiangolo.com/) + [uvicorn](https://www.uvicorn.org/) | 0.136.3+ / 0.49.0+ | HTTP proxy server for `/api/*` |
 | Optional: MQTT       | [paho-mqtt](https://www.eclipse.org/paho/) | 2.1+ | MQTT broker publishing            |
 
 **Design principles:** Single HTTP request per command, async/await throughout, connection reuse, lazy loading of optional deps, never-comment patterns, typed error hierarchy with exit codes.

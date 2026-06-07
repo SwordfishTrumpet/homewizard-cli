@@ -7,7 +7,7 @@ import typer
 from rich.console import Console
 
 from ..client_v2 import P1ClientV2
-from ..config import resolve_host
+from ..config import resolve_host, resolve_no_verify, resolve_token
 from ..errors import P1Error, UnsupportedError
 from ..models.v2 import StateResponse
 
@@ -68,6 +68,8 @@ async def _state_async(
         raise UnsupportedError("This command only supports API v2")
     console = Console()
     host = resolve_host(host)
+    token = resolve_token(token)
+    no_verify = resolve_no_verify(no_verify)
     try:
         async with P1ClientV2(
             host, timeout, token=token, verify_cert=not no_verify

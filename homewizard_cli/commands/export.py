@@ -245,7 +245,8 @@ async def _export_async(
     # Load config and resolve export-specific defaults
     cfg = load_config()
     export_cfg = cfg.export if cfg.export else None
-    cfg_val = lambda key: getattr(export_cfg, key, None) if export_cfg else None  # noqa: E731
+    def cfg_val(key: str):
+        return getattr(export_cfg, key, None) if export_cfg else None
 
     format = _resolve_export_option(format, cfg_val("format"), "influx")
     watch = _resolve_export_option(watch, cfg_val("watch"))
@@ -539,6 +540,8 @@ async def _export_async(
                     await asyncio.wait_for(shutdown_event.wait(), timeout=watch)
     finally:
         shutdown_event.set()
+        if store:
+            store.close()
         if mqtt_client is not None:
             await mqtt_client.close()
         file_stack.close()

@@ -18,7 +18,7 @@ def _get_tariff_rate(tariff: int, config: TariffConfig) -> float:
 def _safe_float(value: Any) -> float:
     """Coerce value to float, defaulting to 0.0."""
     try:
-        return float(value)  # type: ignore[arg-type]
+        return float(value)
     except (TypeError, ValueError):
         return 0.0
 

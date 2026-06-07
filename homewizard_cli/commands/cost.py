@@ -157,10 +157,8 @@ async def _cost_async(
         _write_cost(result, output_format, console, tariffs)
 
         if watch:
-            import time
-
             while True:
-                time.sleep(watch)
+                await asyncio.sleep(watch)
                 if api_version == "v2":
                     data = await c.get_json_v2("/api/measurement", Measurement)
                 else:
