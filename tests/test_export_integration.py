@@ -978,3 +978,127 @@ def test_export_mqtt_publishes_with_delta():
         )
     assert result.exit_code == 0, result.output
     mqtt_instance.publish.assert_called_once()
+
+
+# ── issue #10: --fields must honour --format and --rotate ────────────────
+
+
+def test_export_fields_with_rotation_produces_rotated_file(tmp_path: Path):
+    """--fields must not skip file rotation, and the chosen format is written."""
+    file_path = tmp_path / "export.log"
+
+    times = [
+        datetime(2026, 5, 29, 10, 0, 0),
+        datetime(2026, 5, 29, 11, 0, 0),
+    ]
+    time_idx = 0
+
+    def mock_now():
+        nonlocal time_idx
+        idx = min(time_idx, len(times) - 1)
+        time_idx += 1
+        return times[idx]
+
+    call_count = 0
+
+    async def side_effect(endpoint, model):
+        nonlocal call_count
+        call_count += 1
+        if call_count > 2:
+            raise RuntimeError("stop")
+        return _make_measurement()
+
+    client = AsyncMock()
+    client.__aenter__ = AsyncMock(return_value=client)
+    client.__aexit__ = AsyncMock(return_value=False)
+    client.get_json_v2 = AsyncMock(side_effect=side_effect)
+
+    wait_count = 0
+
+    async def mock_wait_for(fut, timeout=None):
+        nonlocal wait_count
+        wait_count += 1
+        if wait_count >= 3:
+            raise RuntimeError("stop")
+        if asyncio.iscoroutine(fut):
+            fut.close()
+        raise TimeoutError()
+
+    with (
+        patch("homewizard_cli.commands.export.resolve_client", return_value=client),
+        patch("homewizard_cli.commands.export.datetime") as mock_dt,
+        patch(
+            "homewizard_cli.commands.export.asyncio.wait_for",
+            side_effect=mock_wait_for,
+        ),
+        pytest.raises(RuntimeError, match="stop"),
+    ):
+        mock_dt.now = mock_now
+        mock_dt.strftime = datetime.strftime
+        asyncio.run(
+            _export_async(
+                format="influx",
+                watch=0.01,
+                file=str(file_path),
+                host="192.168.1.1",
+                request_timeout=3.0,
+                rotate="hourly",
+                fields="active_power_w",
+            )
+        )
+
+    rotated = file_path.with_name(f"{file_path.name}.2026-05-29T10")
+    assert rotated.exists()
+    assert rotated.read_text().startswith("p1_meter,")
+
+
+def test_export_fields_with_csv_format_writes_csv(tmp_path: Path):
+    file_path = tmp_path / "out.csv"
+    client = _make_client_mock()
+    with patch("homewizard_cli.commands.export.resolve_client", return_value=client):
+        asyncio.run(
+            _export_async(
+                format="csv",
+                watch=None,
+                file=str(file_path),
+                host="192.168.1.1",
+                request_timeout=3.0,
+                fields="active_power_w",
+            )
+        )
+    header = file_path.read_text().splitlines()[0]
+    assert header.startswith("timestamp,active_power_w")
+
+
+def test_export_fields_with_influx_format_writes_influx(tmp_path: Path):
+    file_path = tmp_path / "out.log"
+    client = _make_client_mock()
+    with patch("homewizard_cli.commands.export.resolve_client", return_value=client):
+        asyncio.run(
+            _export_async(
+                format="influx",
+                watch=None,
+                file=str(file_path),
+                host="192.168.1.1",
+                request_timeout=3.0,
+                fields="active_power_w",
+            )
+        )
+    assert file_path.read_text().startswith("p1_meter,")
+
+
+def test_export_fields_with_prometheus_format_writes_prometheus(tmp_path: Path):
+    file_path = tmp_path / "out.prom"
+    client = _make_client_mock()
+    with patch("homewizard_cli.commands.export.resolve_client", return_value=client):
+        asyncio.run(
+            _export_async(
+                format="prometheus",
+                watch=None,
+                file=str(file_path),
+                host="192.168.1.1",
+                request_timeout=3.0,
+                fields="active_power_w",
+            )
+        )
+    assert "p1_active_power_w" in file_path.read_text()
