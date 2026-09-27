@@ -138,7 +138,12 @@ def export(
         None, "--skip-unchanged", help="Skip write if data unchanged"
     ),
     fields: str | None = typer.Option(
-        None, "--fields", help="Comma-separated field list"
+        None,
+        "--fields",
+        help=(
+            "Comma-separated field list (narrows JSON/table output; "
+            "fixed-schema formats use their canonical fields)"
+        ),
     ),
     delta: bool | None = typer.Option(
         None, "--delta", help="Show only changed fields (requires --watch)"
@@ -503,7 +508,13 @@ async def _export_async(
                                 f"MQTT publish failed ({mqtt_client.pending} buffered)",
                                 style="yellow",
                             )
-                    elif filtered is not None:
+                    elif filtered is not None and output_format in (
+                        Format.JSON,
+                        Format.TABLE,
+                    ):
+                        # --fields narrows the schema-less formats (JSON, table).
+                        # Fixed-schema formats fall through to the canonical
+                        # writer below so the requested format is honoured.
                         if not file:
                             if output_format == Format.TABLE:
                                 from rich.table import Table
@@ -517,6 +528,7 @@ async def _export_async(
                             else:
                                 _print_json(console, filtered, indent=True)
                         if file_handle:
+                            _check_rotation()
                             _safe_write(_dumps_json(filtered, indent=True) + "\n")
                     else:
                         if file_handle:
