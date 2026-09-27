@@ -20,6 +20,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `users delete --name` URL-encodes the name; `energy --tariffs` no longer crashes when T3/T4 export is absent
 - long JSON lines are no longer wrapped by Rich (was producing invalid JSON for long values)
 - Sphinx API docs build with zero warnings (removed nonexistent module stanzas, disambiguated `type`)
+- parenthesised `--until` expressions are evaluated correctly: `(a > 0) AND (b < 0)` is no longer stripped into a corrupt inner expression (#7)
+- `power --agg` and `export --agg` now produce the rolling mean/min/max/stddev output the README documents (#8)
+- `export --fields` honours `--format` (JSON/table narrowing; fixed-schema formats use their canonical fields) and applies `--rotate` when writing to a file (#10)
+
+### Security
+- every GitHub Action in the release and CodeQL workflows is pinned to an immutable commit SHA instead of a mutable tag or branch (#9)
 
 ### Changed
 - Dependencies upgraded: typer 0.27.1, fastapi 0.141.1, uvicorn 0.52.1, zeroconf 0.150.0, pytest 9.1.1, syrupy 5.5.3, hypothesis 6.165.2, websockets 17.0.1, pre-commit 4.6.1, codespell 2.4.3; mypy + ruff added to dev deps (ruff pinned 0.11.x)
