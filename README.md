@@ -7,7 +7,7 @@
   <img src="https://img.shields.io/badge/coverage-90%25-brightgreen" alt="Coverage 90%">
 </p>
 
-**A high-performance, feature-complete CLI for the HomeWizard P1 Meter.** Read real-time and cumulative energy data, monitor power quality, access raw DSMR telegrams, export to third-party systems (InfluxDB, MQTT, Prometheus, CSV/JSON), serve a REST proxy, view a live TUI dashboard, and manage device settings — all from the command line.
+**A high-performance, feature-complete CLI for the HomeWizard P1 Meter.** Read real-time and cumulative energy data, monitor power quality, access raw DSMR telegrams, export to third-party systems (InfluxDB, MQTT, Prometheus, CSV/JSON), serve a REST proxy, view a live TUI dashboard, and manage device settings, all from the command line.
 
 Supports both **API v1** (HTTP, port 80, no auth) and **API v2** (HTTPS, port 443, Bearer token auth) with automatic device discovery via mDNS.
 
@@ -68,30 +68,30 @@ Supports both **API v1** (HTTP, port 80, no auth) and **API v2** (HTTPS, port 44
 
 ## Core Features
 
-- **One-shot reads** — Instant power, energy, gas, voltage, and quality data in <100ms
-- **Watch mode** — Poll at configurable intervals with Rich-formatted tables
-- **WebSocket push** — Real-time data streaming via `wss://` (v2 only, optional `websockets` dep)
-- **Delta tracking** — Show only changed values with colored green/red deltas
-- **Tariff breakdown** — T1–T4 peak/off-peak import/export breakdowns
-- **3-phase support** — L1/L2/L3 voltage, current, and power readings (optional fields)
-- **Power quality events** — Sag/swell counters across up to 3 phases, power failure event logs
-- **Raw DSMR telegrams** — Full OBIS telegram access with CRC validation, OBIS querying, and JSON parsing
-- **Rich TUI dashboard** — Full-screen real-time dashboard with live sparklines
-- **Data export** — Stream to InfluxDB, MQTT, Prometheus, CSV, JSON, TSV, env, or raw formats
-- **File rotation** — Daily or hourly rotation for log files
-- **Prometheus metrics** — Built-in HTTP metrics endpoint for Prometheus scraping
-- **PID file** — Process management with stale PID detection
-- **HTTP proxy server** — FastAPI + uvicorn REST proxy with optional response caching
-- **v2 device management** — Reboot, pair tokens, list/delete users, control Plug-In Batteries
-- **Configuration file** — Persistent host, timeout, format, and export defaults via `~/.config/homewizard-cli/config.toml`
-- **Auto-discovery** — Zero-config mDNS discovery with 24-hour caching
-- **Multi-format output** — Table (Rich), JSON, CSV, TSV, InfluxDB line protocol, Prometheus exposition, env, minimal, raw
-- **JSONPath queries** — Extract specific fields with `--query "$.field_name"`
-- **Go-style template** — Custom output with `--template "{{.field}}W"` syntax
-- **Expression conditions** — `--until "active_power_w > 1000"` for automated exit
-- **Graceful signal handling** — SIGINT/SIGTERM for clean shutdown of export streams
-- **Energy cost calculator** — Real-time and historical cost breakdowns with configurable tariff rates (T1–T4, export credit)
-- **SQLite historical data store** — Optional `--db` flag on any data-fetching command logs readings to a local SQLite database; `history` subcommand queries, aggregates, compares, and analyzes stored data
+- **One-shot reads**: Instant power, energy, gas, voltage, and quality data in <100ms
+- **Watch mode**: Poll at configurable intervals with Rich-formatted tables
+- **WebSocket push**: Real-time data streaming via `wss://` (v2 only, optional `websockets` dep)
+- **Delta tracking**: Show only changed values with colored green/red deltas
+- **Tariff breakdown**: T1-T4 peak/off-peak import/export breakdowns
+- **3-phase support**: L1/L2/L3 voltage, current, and power readings (optional fields)
+- **Power quality events**: Sag/swell counters across up to 3 phases, power failure event logs
+- **Raw DSMR telegrams**: Full OBIS telegram access with CRC validation, OBIS querying, and JSON parsing
+- **Rich TUI dashboard**: Full-screen real-time dashboard with live sparklines
+- **Data export**: Stream to InfluxDB, MQTT, Prometheus, CSV, JSON, TSV, env, or raw formats
+- **File rotation**: Daily or hourly rotation for log files
+- **Prometheus metrics**: Built-in HTTP metrics endpoint for Prometheus scraping
+- **PID file**: Process management with stale PID detection
+- **HTTP proxy server**: FastAPI + uvicorn REST proxy with optional response caching
+- **v2 device management**: Reboot, pair tokens, list/delete users, control Plug-In Batteries
+- **Configuration file**: Persistent host, timeout, format, and export defaults via `~/.config/homewizard-cli/config.toml`
+- **Auto-discovery**: Zero-config mDNS discovery with 24-hour caching
+- **Multi-format output**: Table (Rich), JSON, CSV, TSV, InfluxDB line protocol, Prometheus exposition, env, minimal, raw
+- **JSONPath queries**: Extract specific fields with `--query "$.field_name"`
+- **Go-style template**: Custom output with `--template "{{.field}}W"` syntax
+- **Expression conditions**: `--until "active_power_w > 1000"` for automated exit
+- **Graceful signal handling**: SIGINT/SIGTERM for clean shutdown of export streams
+- **Energy cost calculator**: Real-time and historical cost breakdowns with configurable tariff rates (T1-T4, export credit)
+- **SQLite historical data store**: Optional `--db` flag on any data-fetching command logs readings to a local SQLite database; `history` subcommand queries, aggregates, compares, and analyzes stored data
 
 ---
 
@@ -104,7 +104,7 @@ Supports both **API v1** (HTTP, port 80, no auth) and **API v2** (HTTPS, port 44
 | Data models          | [Pydantic](https://docs.pydantic.dev/) | 2.13.4+ | Response validation, v1↔v2 mapping |
 | Terminal output      | [Rich](https://rich.readthedocs.io/) | 15.0.0+ | Tables, panels, colors, sparklines |
 | mDNS discovery       | [python-zeroconf](https://github.com/python-zeroconf/python-zeroconf) | 0.150.0+ | Network device discovery |
-| Config parsing       | `tomllib` (stdlib)        | — | TOML config file parsing           |
+| Config parsing       | `tomllib` (stdlib)        | n/a | TOML config file parsing           |
 | Optional: WebSocket  | [websockets](https://websockets.readthedocs.io/) | 17.0.1+ | Real-time data push (v2)  |
 | Optional: REST proxy | [FastAPI](https://fastapi.tiangolo.com/) + [uvicorn](https://www.uvicorn.org/) | 0.141.1+ / 0.52.1+ | HTTP proxy server for `/api/*` |
 | Optional: MQTT       | [paho-mqtt](https://www.eclipse.org/paho/) | 2.1+ | MQTT broker publishing            |
@@ -200,7 +200,7 @@ homewizard-cli ping
 ```
 
 ```
-P1 Meter at 192.168.1.100 — OK (42ms)
+P1 Meter at 192.168.1.100: OK (42ms)
 ```
 
 ---
@@ -366,7 +366,7 @@ Net:     10,000.00 kWh consumed
 ```
 
 ```bash
-# With tariff breakdown (T1–T4 when available)
+# With tariff breakdown (T1-T4 when available)
 homewizard-cli energy --tariffs
 ```
 
@@ -383,7 +383,7 @@ T2 (off-peak): Import: 4,111.11  Export: 1,111.11
 
 | Option      | Description                                              |
 |-------------|----------------------------------------------------------|
-| `--tariffs` | Show T1–T4 tariff breakdown (T3/T4 only if supported)   |
+| `--tariffs` | Show T1-T4 tariff breakdown (T3/T4 only if supported)   |
 
 ### `gas`
 
@@ -423,10 +423,10 @@ homewizard-cli gas --watch 10
 
 ### `quality`
 
-Power quality monitoring — voltage sags, swells, and power failure counters across up to 3 phases.
+Power quality monitoring: voltage sags, swells, and power failure counters across up to 3 phases.
 
 ```bash
-# All counters (L1–L3 sag/swell when available)
+# All counters (L1-L3 sag/swell when available)
 homewizard-cli quality
 ```
 
@@ -442,7 +442,7 @@ Long Failures:   0
 ```
 
 ```bash
-# Alert mode — only print when counts change
+# Alert mode: only print when counts change
 homewizard-cli quality --watch --alert
 
 # Show power failure event log (parsed from DSMR telegram)
@@ -456,7 +456,7 @@ Short Failures:  1
 Long Failures:   0
 
 Power Failure Events:
-  2026-05-28 14:23:00 — Short outage (2 s)
+  2026-05-28 14:23:00 - Short outage (2 s)
 ```
 
 **Options:**
@@ -500,7 +500,7 @@ homewizard-cli telegram --validate
 ```
 
 ```
-CRC: 522F — Valid
+CRC: 522F (Valid)
 ```
 
 ```bash
@@ -542,17 +542,17 @@ homewizard-cli telegram --format json --named
   "timestamp": "260529120000W",
   "obis": {
     "Timestamp of telegram": "260529120000W",
-    "Total imported energy, tariff 1 (peak) — kWh": "00012345.678*kWh",
-    "Total imported energy, tariff 2 (off-peak) — kWh": "00004111.111*kWh",
-    "Total exported energy, tariff 1 (peak) — kWh": "00001234.567*kWh",
-    "Total exported energy, tariff 2 (off-peak) — kWh": "00001111.111*kWh",
-    "Actual active power (+ = import) — kW": "000456.789*kW",
-    "Active power L1 (import) — kW": "000456.789*kW",
-    "Voltage L1 — V": "000238.5*V",
-    "Current L1 — A": "000001.9*A",
+    "Total imported energy, tariff 1 (peak) - kWh": "00012345.678*kWh",
+    "Total imported energy, tariff 2 (off-peak) - kWh": "00004111.111*kWh",
+    "Total exported energy, tariff 1 (peak) - kWh": "00001234.567*kWh",
+    "Total exported energy, tariff 2 (off-peak) - kWh": "00001111.111*kWh",
+    "Actual active power (+ = import) - kW": "000456.789*kW",
+    "Active power L1 (import) - kW": "000456.789*kW",
+    "Voltage L1 - V": "000238.5*V",
+    "Current L1 - A": "000001.9*A",
     "Short power failure count": "00002",
     "Long power failure count": "00000",
-    "Gas reading (timestamp + value) — m³": "260529120000W(09876.543*m3"
+    "Gas reading (timestamp + value) - m³": "260529120000W(09876.543*m3"
   },
   "crc": "522F",
   "valid": true
@@ -568,7 +568,7 @@ homewizard-cli telegram --explain 1-0:1.8.1
 ```
 
 ```
-1-0:1.8.1 — Total import energy (T1, peak)
+1-0:1.8.1 - Total import energy (T1, peak)
 ```
 
 ```bash
@@ -622,7 +622,7 @@ DSMR:        5.0
 Cloud:       enabled
 ```
 
-**Options:** *(none — uses global options for host, timeout, etc.)*
+**Options:** *(none; uses global options for host, timeout, etc.)*
 
 ### `system`
 
@@ -654,7 +654,7 @@ homewizard-cli system --cloud-toggle
 homewizard-cli system --cloud false
 homewizard-cli system --cloud true
 
-# Set LED brightness (v2 only, 0–100)
+# Set LED brightness (v2 only, 0-100)
 homewizard-cli system --led-brightness 50
 
 # v1 fallback (only cloud_enabled is writable)
@@ -668,7 +668,7 @@ homewizard-cli system --api-version v1 --cloud false
 |-------------------|-----------------------------------------------------------------------|
 | `--cloud`         | Set `cloud_enabled` to `true` or `false` (e.g. `--cloud false`)       |
 | `--cloud-toggle`  | Toggle the current `cloud_enabled` value                               |
-| `--led-brightness`| Set LED brightness (0–100, v2 only)                                   |
+| `--led-brightness`| Set LED brightness (0-100, v2 only)                                   |
 
 ### `identify`
 
@@ -705,7 +705,7 @@ homewizard-cli ping
 ```
 
 ```
-P1 Meter at 192.168.1.100 — OK (42ms)
+P1 Meter at 192.168.1.100: OK (42ms)
 ```
 
 ```bash
@@ -717,7 +717,7 @@ homewizard-cli ping --quiet
 
 | Option    | Description                                           |
 |-----------|-------------------------------------------------------|
-| `--quiet` | Exit code only — no output (0=success, non-zero=fail) |
+| `--quiet` | Exit code only, no output (0=success, non-zero=fail) |
 
 ### `discover`
 
@@ -780,7 +780,7 @@ homewizard-cli dashboard --watch 5
 
 ```
 ┌────────────────────────────────────────────────────────┐
-│ P1 Meter — SDM230  |  WiFi: MyNetwork (78%)            │
+│ P1 Meter: SDM230  |  WiFi: MyNetwork (78%)            │
 └────────────────────────────────────────────────────────┘
 ┌──────────────┐ ┌──────────────┐ ┌──────────────┐
 │ Power        │ │ Energy       │ │    Gas       │
@@ -872,15 +872,15 @@ homewizard-cli export --format json --watch 2 | curl -X POST http://influxdb:808
 
 #### Export Features
 
-- **Exponential backoff** — On fetch/write errors, retry with backoff starting at 1s, doubling up to 60s max. Resets after a successful fetch.
-- **Signal handling** — Listens for SIGINT and SIGTERM for graceful shutdown: closes MQTT connections, flushes file handles, stops the metrics server, removes the PID file.
-- **Metrics server** (`--metrics-port`) — Exposes Prometheus-format metrics at `GET /metrics`:
-  - `homewizard_readings_total` — Successful readings counter
-  - `homewizard_errors_total` — Error counter
-  - `homewizard_last_poll_timestamp_seconds` — Unix timestamp of last successful poll
+- **Exponential backoff**: On fetch/write errors, retry with backoff starting at 1s, doubling up to 60s max. Resets after a successful fetch.
+- **Signal handling**: Listens for SIGINT and SIGTERM for graceful shutdown: closes MQTT connections, flushes file handles, stops the metrics server, removes the PID file.
+- **Metrics server** (`--metrics-port`): Exposes Prometheus-format metrics at `GET /metrics`:
+  - `homewizard_readings_total`: Successful readings counter
+  - `homewizard_errors_total`: Error counter
+  - `homewizard_last_poll_timestamp_seconds`: Unix timestamp of last successful poll
   - `--metrics-port 0` disables the metrics endpoint (default)
-- **PID file** (`--pid-file`) — Writes PID on startup, removes on exit. Detects stale PIDs (process no longer alive) and refuses to start if an existing process is already running (exit code 1).
-- **File rotation** (`--rotate`) — Supports `daily` (appends `YYYY-MM-DD` to filename) and `hourly` (appends `YYYY-MM-DDTHH`). Previous file is renamed before a new one is opened.
+- **PID file** (`--pid-file`): Writes PID on startup, removes on exit. Detects stale PIDs (process no longer alive) and refuses to start if an existing process is already running (exit code 1).
+- **File rotation** (`--rotate`): Supports `daily` (appends `YYYY-MM-DD` to filename) and `hourly` (appends `YYYY-MM-DDTHH`). Previous file is renamed before a new one is opened.
 
 ### `serve`
 
@@ -891,7 +891,7 @@ homewizard-cli serve
 ```
 
 ```
-P1 Meter at 192.168.1.100 — OK
+P1 Meter at 192.168.1.100: OK
 Starting proxy at http://0.0.0.0:8000
 Proxying to P1 Meter at 192.168.1.100
 ```
@@ -1039,7 +1039,7 @@ homewizard-cli state --switch-lock
 | `--power-off`     | Turn the socket off                                      |
 | `--switch-lock`   | Lock the switch (prevent manual toggling)                |
 | `--switch-unlock` | Unlock the switch                                        |
-| `--brightness`    | LED brightness (0–100)                                   |
+| `--brightness`    | LED brightness (0-100)                                   |
 
 ---
 
@@ -1201,7 +1201,7 @@ homewizard-cli config --show
 
 ### `history`
 
-Query historical data previously logged to a SQLite database via `--db` on data-fetching commands. Pure local queries — no HTTP calls to the device.
+Query historical data previously logged to a SQLite database via `--db` on data-fetching commands. Pure local queries, no HTTP calls to the device.
 
 ```bash
 # DB metadata
@@ -1212,7 +1212,7 @@ homewizard-cli history --info
 Database:    ~/.config/homewizard-cli/energy.db
 Size:        4.2 MB
 Rows:        87,402
-Devices:     1 (ABC123 — P1 Meter)
+Devices:     1 (ABC123, P1 Meter)
 Date range:  2026-03-14 08:00:00 .. 2026-05-29 14:32:00
 Completeness: 94.3%
 ```
@@ -1356,7 +1356,7 @@ v2 measurement data is automatically mapped to v1 field names via the unified `M
 
 1. Queries `_homewizard._tcp.local.` (v2 mDNS service)
 2. Falls back to `_hwenergy._tcp.local.` (v1 legacy mDNS service)
-3. Falls back to ARP table scan — checks `/proc/net/arp` for TP-Link MAC prefixes `5c:62:8b` and `3c:61:05`
+3. Falls back to ARP table scan, checks `/proc/net/arp` for TP-Link MAC prefixes `5c:62:8b` and `3c:61:05`
 4. Caches the result to `~/.config/homewizard-cli/host` with a 24-hour TTL
 
 The `--save` flag persists the discovered host to the cache. The `--all` flag returns every detected HomeWizard device on the network in a Rich table.
@@ -1404,7 +1404,7 @@ homewizard-cli data --ws --watch 10    # idle timeout: close after 10s of inacti
 homewizard-cli data --ws --until "active_power_w > 5000"
 ```
 
-Without `--watch`, a single message is received and the connection closes. With `--watch`, the value becomes the WebSocket idle timeout (defaults to 30s if not specified). The `websockets` package is loaded lazily — if missing, a clear error message is shown directing users to install `homewizard-cli[ws]`.
+Without `--watch`, a single message is received and the connection closes. With `--watch`, the value becomes the WebSocket idle timeout (defaults to 30s if not specified). The `websockets` package is loaded lazily; if missing, a clear error message is shown directing users to install `homewizard-cli[ws]`.
 
 ---
 
@@ -1474,8 +1474,8 @@ homewizard-cli data --watch 2 \
 ```
 
 **Shell command environment:** The triggering command receives:
-- `HW_CONDITION` — The expression that fired (e.g. `"active_power_w > 5000"`)
-- `HW_DATA` — JSON string of the full `DataResponse` dictionary
+- `HW_CONDITION`: The expression that fired (e.g. `"active_power_w > 5000"`)
+- `HW_DATA`: JSON string of the full `DataResponse` dictionary
 
 | Option              | Description                                                       |
 |---------------------|-------------------------------------------------------------------|
@@ -1494,7 +1494,7 @@ homewizard-cli data --query "$.active_power_w"
 homewizard-cli data --query "$.total_power_import_kwh"
 ```
 
-Works with `--format` — outputs as a Rich table for `table` format, JSON for all others.
+Works with `--format`: outputs as a Rich table for `table` format, JSON for all others.
 
 ---
 
@@ -1603,7 +1603,7 @@ Typed error hierarchy with distinct exit codes:
 | 8         | `UnsupportedError`   | Device does not support this feature   |
 | 10        | `SystemExit(10)`     | `--until` condition was met            |
 
-Device capability detection is not yet implemented — commands do not validate device type before execution. If a command is invoked on a device that does not support it, the raw HTTP error is surfaced instead.
+Device capability detection is not yet implemented; commands do not validate device type before execution. If a command is invoked on a device that does not support it, the raw HTTP error is surfaced instead.
 
 All errors are caught at the entry point (`main.py`) and printed in red with their exit code.
 
@@ -1622,7 +1622,7 @@ The bundled certificate enables `ssl.VERIFY_X509_PARTIAL_CHAIN` for proper chain
 
 **Hostname verification:** When a device identifier is available (from device info), the SSL context enables `hostname_checks_common_name` for proper hostname verification.
 
-**`--no-verify` safety:** Using `--no-verify` without `--token` on API v2 is rejected with exit code 1, because v2 requires authentication and disabling verification without a token is almost always wrong. When `--no-verify` is used with a token, a warning is logged: "SSL verification disabled — connections are insecure."
+**`--no-verify` safety:** Using `--no-verify` without `--token` on API v2 is rejected with exit code 1, because v2 requires authentication and disabling verification without a token is almost always wrong. When `--no-verify` is used with a token, a warning is logged that SSL verification is disabled and connections are insecure.
 
 ---
 
@@ -1631,7 +1631,7 @@ The bundled certificate enables `ssl.VERIFY_X509_PARTIAL_CHAIN` for proper chain
 Proxy resolution follows this priority chain:
 
 1. Explicit `--proxy` CLI option (scheme://host:port)
-2. `NO_PROXY` / `no_proxy` env var — exact host match (no wildcards), skips proxy
+2. `NO_PROXY` / `no_proxy` env var: exact host match (no wildcards), skips proxy
 3. `HTTP_PROXY` / `HTTPS_PROXY` / `http_proxy` / `https_proxy` env vars
 
 The `httpx.AsyncClient` respects standard `/etc/hosts` entries alongside proxy environment variables (`trust_env=False` is NOT set).
@@ -1699,7 +1699,7 @@ uv sync
 # Lint (basic rules)
 uv run ruff check homewizard_cli/ tests/
 
-# Lint (extended rules — SIM, B, N, UP, I, C4)
+# Lint (extended rules: SIM, B, N, UP, I, C4)
 uv run ruff check homewizard_cli/ tests/ --select E,W,F,I,UP,N,B,C4,SIM
 
 # Typecheck (basic)
@@ -1740,4 +1740,4 @@ Test fixtures live in `tests/fixtures/` (e.g., `api.json`, `data.json`, `system.
 
 ## License
 
-MIT — see the [GitHub repository](https://github.com/SwordfishTrumpet/homewizard-cli) for details.
+MIT, see the [GitHub repository](https://github.com/SwordfishTrumpet/homewizard-cli) for details.
