@@ -1102,3 +1102,66 @@ def test_export_fields_with_prometheus_format_writes_prometheus(tmp_path: Path):
             )
         )
     assert "p1_active_power_w" in file_path.read_text()
+
+
+# ── issue #8: --agg rolling aggregates ───────────────────────────────────
+
+
+def test_export_agg_watch_writes_merged_json(tmp_path: Path):
+    file_path = tmp_path / "agg.json"
+
+    call_count = 0
+
+    async def side_effect(endpoint, model):
+        nonlocal call_count
+        call_count += 1
+        return _make_measurement(active_power_w=500.0 + call_count * 100)
+
+    client = AsyncMock()
+    client.__aenter__ = AsyncMock(return_value=client)
+    client.__aexit__ = AsyncMock(return_value=False)
+    client.get_json_v2 = AsyncMock(side_effect=side_effect)
+
+    wait_count = 0
+
+    async def mock_wait_for(fut, timeout=None):
+        nonlocal wait_count
+        wait_count += 1
+        if asyncio.iscoroutine(fut):
+            fut.close()
+        if wait_count >= 3:
+            raise RuntimeError("stop")
+        raise TimeoutError()
+
+    with (
+        patch("homewizard_cli.commands.export.resolve_client", return_value=client),
+        patch(
+            "homewizard_cli.commands.export.asyncio.wait_for",
+            side_effect=mock_wait_for,
+        ),
+        pytest.raises(RuntimeError, match="stop"),
+    ):
+        asyncio.run(
+            _export_async(
+                format="json",
+                watch=0.01,
+                file=str(file_path),
+                host="192.168.1.1",
+                request_timeout=3.0,
+                agg=True,
+            )
+        )
+
+    content = file_path.read_text()
+    assert "active_power_w_mean" in content
+    assert "active_power_w_stddev" in content
+
+
+def test_export_agg_flag_accepted():
+    client = _make_client_mock()
+    with patch("homewizard_cli.commands.export.resolve_client", return_value=client):
+        result = runner.invoke(
+            app, ["export", "--agg", "--format", "json", "--host", "192.168.1.1"]
+        )
+    assert result.exit_code == 0, result.output
+    assert "No such option" not in result.output

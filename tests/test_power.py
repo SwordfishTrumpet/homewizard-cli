@@ -2,6 +2,7 @@
 
 from unittest.mock import AsyncMock, patch
 
+import pytest
 from typer.testing import CliRunner
 
 from homewizard_cli.main import app
@@ -200,3 +201,71 @@ def test_power_v1_full_sparkline():
     assert result.exit_code == 0
     assert "Net:" in result.output
     assert "Trend:" in result.output
+
+
+# ---------------------------------------------------------------------------
+# --agg rolling aggregates (issue #8)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_power_agg_watch_prints_summary():
+    from io import StringIO
+
+    from rich.console import Console
+
+    from homewizard_cli.commands.power import _power_async
+
+    call_count = 0
+
+    async def side_effect(endpoint, model):
+        nonlocal call_count
+        call_count += 1
+        return Measurement(active_power_w=500.0 + call_count * 100)
+
+    client = AsyncMock()
+    client.__aenter__ = AsyncMock(return_value=client)
+    client.__aexit__ = AsyncMock(return_value=False)
+    client.get_json_v2 = AsyncMock(side_effect=side_effect)
+
+    sleep_calls = 0
+
+    async def mock_sleep(val):
+        nonlocal sleep_calls
+        sleep_calls += 1
+        if sleep_calls >= 3:
+            raise RuntimeError("stop")
+
+    buf = StringIO()
+    with (
+        patch("homewizard_cli.commands.power.resolve_client", return_value=client),
+        patch("homewizard_cli.commands.power.asyncio.sleep", side_effect=mock_sleep),
+        patch(
+            "homewizard_cli.commands.power.Console",
+            return_value=Console(file=buf, force_terminal=False, width=200),
+        ),
+        pytest.raises(RuntimeError, match="stop"),
+    ):
+        await _power_async(
+            watch=1.0,
+            full=False,
+            color=False,
+            sparkline=False,
+            format_str="auto",
+            until=None,
+            host="192.168.1.1",
+            request_timeout=3.0,
+            agg=True,
+        )
+
+    assert call_count >= 3
+    assert "mean" in buf.getvalue()
+    assert "stddev" in buf.getvalue()
+
+
+def test_power_agg_flag_accepted():
+    client = _make_client(Measurement(active_power_w=100.0))
+    with patch("homewizard_cli.commands.power.resolve_client", return_value=client):
+        result = runner.invoke(app, ["power", "--agg", "--api-version", "v2"])
+    assert result.exit_code == 0
+    assert "No such option" not in result.output
