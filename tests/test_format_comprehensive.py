@@ -829,3 +829,25 @@ def test_influx_skips_empty_tags():
     assert "serial=" not in line.split(" ", 1)[0]
     assert "meter_model=" not in line.split(" ", 1)[0]
     assert line.startswith("p1_meter,device=HWE-P1 ")
+
+
+# -- issue #6: no Rich hard-wrap on machine-readable output ---------------
+
+
+def test_influx_no_wrap_at_width_80():
+    from homewizard_cli.format.influx import write_influx
+
+    data = basic_data(unique_id="x" * 200)
+    buf = StringIO()
+    write_influx(data, Console(file=buf, force_terminal=False, width=80))
+    assert len(buf.getvalue().splitlines()) == 1
+
+
+def test_raw_no_wrap_at_width_80():
+    from homewizard_cli.format.raw import write_raw
+
+    message = "y" * 200
+    buf = StringIO()
+    write_raw(basic_data(text_message=message), Console(file=buf, force_terminal=False, width=80))
+    lines = buf.getvalue().splitlines()
+    assert f"0-0:96.13.0({message})" in lines

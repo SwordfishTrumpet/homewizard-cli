@@ -435,18 +435,20 @@ def _print_csv(rows: list[dict], console: Console) -> None:
     if not rows:
         return
     headers = list(rows[0].keys())
-    console.print(",".join(_csv_escape(h) for h in headers))
+    console.print(",".join(_csv_escape(h) for h in headers), soft_wrap=True)
     for row in rows:
-        console.print(",".join(_csv_escape(row[h]) for h in headers))
+        console.print(",".join(_csv_escape(row[h]) for h in headers), soft_wrap=True)
 
 
 def _print_tsv(rows: list[dict], console: Console) -> None:
     if not rows:
         return
     headers = list(rows[0].keys())
-    console.print("\t".join(_csv_escape(h, tsv=True) for h in headers))
+    console.print("\t".join(_csv_escape(h, tsv=True) for h in headers), soft_wrap=True)
     for row in rows:
-        console.print("\t".join(_csv_escape(row[h], tsv=True) for h in headers))
+        console.print(
+            "\t".join(_csv_escape(row[h], tsv=True) for h in headers), soft_wrap=True
+        )
 
 
 def _format_file_size(bytes_val: int) -> str:

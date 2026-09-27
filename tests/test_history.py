@@ -517,3 +517,33 @@ def test_compute_comparison_skips_noise_fields():
     result = _compute_comparison(current, prior, None)
     fields = {r["field"] for r in result}
     assert fields == {"total_power_import_kwh", "total_gas_m3"}
+
+
+# -- issue #6: no Rich hard-wrap on CSV/TSV records ----------------------
+
+
+def test_print_csv_no_wrap_at_width_80():
+    from io import StringIO
+
+    from rich.console import Console
+
+    from homewizard_cli.commands.history import _print_csv
+
+    rows = [{"c%d" % i: "x" * 20 for i in range(12)}]
+    buf = StringIO()
+    _print_csv(rows, Console(file=buf, force_terminal=False, width=80))
+    # Header plus exactly one record: no Rich-inserted physical newline.
+    assert len(buf.getvalue().splitlines()) == 2
+
+
+def test_print_tsv_no_wrap_at_width_80():
+    from io import StringIO
+
+    from rich.console import Console
+
+    from homewizard_cli.commands.history import _print_tsv
+
+    rows = [{"c%d" % i: "x" * 20 for i in range(12)}]
+    buf = StringIO()
+    _print_tsv(rows, Console(file=buf, force_terminal=False, width=80))
+    assert len(buf.getvalue().splitlines()) == 2
