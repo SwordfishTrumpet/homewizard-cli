@@ -146,3 +146,43 @@ def test_is_valid_expression():
     assert not is_valid_expression("active_power_w >> 10")
     assert not is_valid_expression("")
     assert not is_valid_expression(None)
+
+
+def test_expr_grouped_parens_and():
+    # Regression: both sides parenthesized used to be stripped to garbage.
+    expr = "(active_power_w > 0) AND (total_gas_m3 < 10)"
+    assert evaluate_until({"active_power_w": 500.0, "total_gas_m3": 5.0}, expr) is True
+    assert evaluate_until({"active_power_w": 500.0, "total_gas_m3": 50.0}, expr) is False
+    assert evaluate_until({"active_power_w": 0.0, "total_gas_m3": 5.0}, expr) is False
+
+
+def test_expr_grouped_parens_or():
+    expr = "(active_power_w > 0) OR (total_gas_m3 < 10)"
+    assert evaluate_until({"active_power_w": 500.0, "total_gas_m3": 50.0}, expr) is True
+    assert evaluate_until({"active_power_w": 0.0, "total_gas_m3": 5.0}, expr) is True
+    assert evaluate_until({"active_power_w": 0.0, "total_gas_m3": 50.0}, expr) is False
+
+
+def test_expr_grouped_parens_three_groups():
+    expr = "(a > 0) AND (b < 10) AND (c == 3)"
+    assert evaluate_until({"a": 1, "b": 5, "c": 3}, expr) is True
+    assert evaluate_until({"a": 1, "b": 5, "c": 4}, expr) is False
+    assert evaluate_until({"a": 0, "b": 5, "c": 3}, expr) is False
+
+
+def test_expr_grouped_parens_nested():
+    assert evaluate_until({"a": 500.0}, "((a > 0))") is True
+    assert evaluate_until({"a": 0.0}, "((a > 0))") is False
+
+
+def test_is_valid_expression_grouped_parens():
+    from homewizard_cli.expr import is_valid_expression
+
+    assert is_valid_expression("(active_power_w > 0) AND (total_gas_m3 < 10)")
+    assert is_valid_expression("(active_power_w > 0) OR (total_gas_m3 < 10)")
+    assert is_valid_expression(
+        "(active_power_w > 0) AND (total_gas_m3 < 10) AND (active_tariff == 1)"
+    )
+    # Still rejects genuinely malformed input.
+    assert not is_valid_expression("(a > 0) AND () ")
+    assert not is_valid_expression("(a > 0")
