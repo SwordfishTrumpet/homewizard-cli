@@ -133,3 +133,16 @@ def test_expr_not_with_and():
 def test_expr_not_with_or():
     assert evaluate_until({"a": 5, "b": 10}, "NOT a > 10 OR b < 5") is True
     assert evaluate_until({"a": 100, "b": 10}, "NOT a > 10 OR b < 5") is False
+
+
+def test_is_valid_expression():
+    from homewizard_cli.expr import is_valid_expression
+
+    assert is_valid_expression("active_power_w > 10")
+    assert is_valid_expression("active_power_w > 10 AND abs(total_gas_m3) < 5")
+    assert is_valid_expression("NOT active_power_w > 10")
+    assert is_valid_expression("(active_power_w > 10 OR total_gas_m3 < 5)")
+    assert not is_valid_expression("garbage expression")
+    assert not is_valid_expression("active_power_w >> 10")
+    assert not is_valid_expression("")
+    assert not is_valid_expression(None)

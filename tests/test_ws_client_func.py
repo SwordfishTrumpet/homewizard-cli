@@ -45,12 +45,29 @@ class TestCreateSSLContext:
             ctx = _create_ssl_context(verify_cert=True)
             assert ctx.verify_mode == ssl.CERT_REQUIRED
 
+    def test_verify_uses_bundled_cert(self):
+        """MED-8: ws_client must load the bundled HomeWizard CA cert
+        (parity with client_v2)."""
+        with patch("homewizard_cli.client_v2.HOMEWIZARD_CA_CERT", _TEST_CERT):
+            ctx = _create_ssl_context(verify_cert=True)
+            assert ctx.verify_mode == ssl.CERT_REQUIRED
+            assert ctx.verify_flags & ssl.VERIFY_X509_PARTIAL_CHAIN
+
+    def test_verify_malformed_bundled_cert_does_not_raise(self):
+        """CRIT-1 parity: a broken bundled cert must not crash."""
+        with patch(
+            "homewizard_cli.client_v2.HOMEWIZARD_CA_CERT",
+            "-----BEGIN CERTIFICATE-----\ngarbage\n-----END CERTIFICATE-----",
+        ):
+            ctx = _create_ssl_context(verify_cert=True)
+            assert ctx.verify_mode == ssl.CERT_REQUIRED
+
     def test_verify_with_user_cert(self, tmp_path: Path):
         cert_dir = tmp_path / ".config" / "homewizard-cli"
         cert_dir.mkdir(parents=True)
         cert_file = cert_dir / "homewizard-ca.pem"
         cert_file.write_text(_TEST_CERT)
-        with patch("homewizard_cli.ws_client.CA_CERT_PATH", cert_file):
+        with patch("homewizard_cli.client_v2.CA_CERT_PATH", cert_file):
             ctx = _create_ssl_context(verify_cert=True)
             assert ctx.verify_mode == ssl.CERT_REQUIRED
 
@@ -60,7 +77,7 @@ class TestCreateSSLContext:
         cert_dir.mkdir(parents=True)
         missing_cert = cert_dir / "nonexistent.pem"
         assert not missing_cert.exists()
-        with patch("homewizard_cli.ws_client.CA_CERT_PATH", missing_cert):
+        with patch("homewizard_cli.client_v2.CA_CERT_PATH", missing_cert):
             ctx = _create_ssl_context(verify_cert=True)
             assert ctx.verify_mode == ssl.CERT_REQUIRED
 

@@ -93,7 +93,6 @@ app.add_typer(history_cmd.app, name="history")
 def _version_callback(value: bool) -> None:
     if value:
         import platform
-        import sys
 
         typer.echo(
             f"homewizard-cli v{__version__} "
@@ -148,6 +147,34 @@ def main_callback(
     if no_color:
         os.environ["NO_COLOR"] = "1"
     if ctx.invoked_subcommand is not None:
+        # Global options are NOT propagated to subcommands (each command has
+        # its own options with independent defaults). Warn loudly instead of
+        # silently ignoring them (MED-1).
+        _GLOBAL_OPTS = (
+            "host",
+            "timeout",
+            "format",
+            "proxy",
+            "api_version",
+            "token",
+            "no_verify",
+        )
+        provided = []
+        for name in _GLOBAL_OPTS:
+            source = ctx.get_parameter_source(name)
+            # Compare by name: typer vendors its own click (typer._click) with
+            # a separate ParameterSource enum, so identity/enum equality fails.
+            if source is not None and source.name == "COMMANDLINE":
+                provided.append(name)
+        if provided:
+            name = provided[0]
+            extra = f" and {len(provided) - 1} more" if len(provided) > 1 else ""
+            print(
+                f"Note: --{name}{extra} before a subcommand is ignored. "
+                f"Pass it after the subcommand: "
+                f"'homewizard-cli {ctx.invoked_subcommand} --{name} ...'.",
+                file=sys.stderr,
+            )
         return
     asyncio.run(
         _default_async(

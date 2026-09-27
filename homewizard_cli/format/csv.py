@@ -51,4 +51,4 @@ def write_csv(data: DataResponse, console: Console):
             str(data.total_gas_m3) if data.total_gas_m3 is not None else "",
         ]
     )
-    console.print(output.getvalue().strip())
+    console.print(output.getvalue().strip(), soft_wrap=True)

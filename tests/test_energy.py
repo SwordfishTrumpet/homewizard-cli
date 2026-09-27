@@ -94,3 +94,36 @@ def test_energy_exporting():
         result = runner.invoke(app, ["energy", "--host", "192.168.1.1"])
         assert result.exit_code == 0
         assert "produced" in result.output
+
+
+def test_energy_tariffs_t3_import_without_export():
+    """MED-6: T3 import present but T3 export None must not crash."""
+    from unittest.mock import AsyncMock, patch
+
+    from homewizard_cli.models import Measurement
+
+    with patch(
+        "homewizard_cli.commands.energy.resolve_client",
+        return_value=AsyncMock(),
+    ) as mock_resolve:
+        client = mock_resolve.return_value
+        client.__aenter__ = AsyncMock(return_value=client)
+        client.__aexit__ = AsyncMock(return_value=False)
+        client.get_json_v2 = AsyncMock(
+            return_value=Measurement(
+                total_power_import_kwh=100.0,
+                total_power_export_kwh=50.0,
+                total_power_import_t1_kwh=60.0,
+                total_power_import_t2_kwh=40.0,
+                total_power_export_t1_kwh=20.0,
+                total_power_export_t2_kwh=30.0,
+                total_power_import_t3_kwh=10.0,
+                total_power_export_t3_kwh=None,
+            )
+        )
+
+        result = runner.invoke(
+            app, ["energy", "--tariffs", "--host", "192.168.1.1"]
+        )
+        assert result.exit_code == 0, result.output
+        assert "T3" in result.output

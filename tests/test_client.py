@@ -169,3 +169,25 @@ async def test_client_no_retry_on_4xx():
         with pytest.raises(HttpError):
             await client.get("/api/v1/data")
         await client.close()
+
+
+@pytest.mark.asyncio
+async def test_client_proxy_scheme_prefers_https_for_https():
+    """MED-2: the v2 (HTTPS) client must prefer HTTPS_PROXY over HTTP_PROXY."""
+    with patch.dict(
+        "os.environ",
+        {
+            "HTTP_PROXY": "http://proxy-http:8080",
+            "HTTPS_PROXY": "http://proxy-https:8443",
+        },
+    ):
+        from homewizard_cli.client import _get_proxy_url
+
+        assert _get_proxy_url(scheme="https") == "http://proxy-https:8443"
+        # v1 (http) keeps preferring HTTP_PROXY
+        assert _get_proxy_url(scheme="http") == "http://proxy-http:8080"
+        # explicit proxy still wins for both schemes
+        assert (
+            _get_proxy_url("http://custom:3128", scheme="https")
+            == "http://custom:3128"
+        )

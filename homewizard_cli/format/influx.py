@@ -7,13 +7,22 @@ from rich.console import Console
 from homewizard_cli.models import DataResponse
 
 
+def _escape_tag(value: str) -> str:
+    """Escape an InfluxDB tag value (LOW-9): commas, spaces, and '='."""
+    return value.replace("\\", "\\\\").replace(" ", "\\ ").replace(",", "\\,").replace("=", "\\=")
+
+
 def write_influx(data: DataResponse, console: Console):
     """Output data as InfluxDB line protocol."""
     timestamp_ns = int(datetime.now(UTC).timestamp() * 1_000_000_000)
-    tags = (
-        f"device=HWE-P1,serial={data.unique_id},"
-        f"meter_model={data.meter_model.replace(' ', '_')}"
-    )
+    serial = _escape_tag(data.unique_id or "")
+    meter_model = _escape_tag(data.meter_model or "")
+    tags_parts = ["device=HWE-P1"]
+    if serial:
+        tags_parts.append(f"serial={serial}")
+    if meter_model:
+        tags_parts.append(f"meter_model={meter_model}")
+    tags = ",".join(tags_parts)
     fields = f"active_power_w={data.active_power_w}"
     if data.active_power_l2_w is not None:
         fields += f",active_power_l2_w={data.active_power_l2_w}"

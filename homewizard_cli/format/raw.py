@@ -91,6 +91,7 @@ def write_raw(data: Measurement, console: Console):
         lines.append(f"0-0:96.13.0({data.text_message})")
     lines.append("!")
     telegram_text = "\n".join(lines)
-    crc_val = _crc16(telegram_text.rstrip("!").encode("ascii"))
+    # DSMR spec: CRC covers the telegram up to and INCLUDING '!'
+    crc_val = _crc16(telegram_text.encode("ascii"))
     telegram_text += f"{crc_val:04X}"
     console.print(telegram_text)

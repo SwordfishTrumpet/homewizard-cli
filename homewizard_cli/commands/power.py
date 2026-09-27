@@ -9,7 +9,7 @@ from rich.console import Console
 from ..alerting import AlertDispatcher
 from ..client_factory import API_VERSIONS, resolve_client
 from ..config import resolve_host
-from ..expr import evaluate_until
+from ..expr import evaluate_until, is_valid_expression
 from ..format import get_format, write_data
 from ..models import Measurement
 from ..storage import _setup_store
@@ -122,6 +122,13 @@ async def _power_async(
             style="yellow",
         )
     output_format = get_format(format_str, console.is_terminal)
+    if until and not is_valid_expression(until):
+        console.print(
+            f"Invalid --until expression: {until}\n"
+            "         Expected e.g. 'active_power_w > 500 AND total_gas_m3 < 10'.",
+            style="red",
+        )
+        raise typer.Exit(code=5)
 
     webhook_urls = [alert_webhook] if alert_webhook else None
     alert_commands = [alert_cmd] if alert_cmd else None
@@ -143,48 +150,56 @@ async def _power_async(
 
     async with client as c:
         store, serial = await _setup_store(db, api_version, c)
-        while True:
-            if api_version == "v2":
-                data = await c.get_json_v2("/api/measurement", Measurement)
-            else:
-                data = await c.get_json("/api/v1/data", Measurement)
+        try:
+            while True:
+                if api_version == "v2":
+                    data = await c.get_json_v2("/api/measurement", Measurement)
+                else:
+                    data = await c.get_json("/api/v1/data", Measurement)
 
-            if store and serial:
-                store.append(data.model_dump(), serial)
+                if store and serial:
+                    store.append(data.model_dump(), serial)
 
-            if sparkline:
-                values.append(data.active_power_w)
-
-            if until and evaluate_until(data.model_dump(), until):
-                console.print(f"Condition met: {until}", style="green")
-                if dispatcher.configured:
-                    await dispatcher.dispatch(until, data.model_dump())
-                if watch is None or not dispatcher.configured:
-                    raise typer.Exit(code=10)
-
-            if full:
-                imported = max(data.active_power_w, 0)
-                exported = abs(min(data.active_power_w, 0))
-                style = "green" if data.active_power_w < 0 else "red" if color else None
-                console.print(f"Net:      {data.active_power_w} W", style=style)
-                console.print(f"Import:     {imported} W")
-                console.print(f"Export:    {exported} W")
-                if data.active_voltage_l1_v:
-                    console.print(f"Voltage:  {data.active_voltage_l1_v} V")
-                if data.active_current_l1_a:
-                    console.print(f"Current:  {data.active_current_l1_a} A")
                 if sparkline:
-                    console.print(f"Trend:    {_sparkline(list(values))}")
-            elif format_str != "auto" or not console.is_terminal:
-                write_data(data, output_format, console)
-            else:
-                direction = "exporting" if data.active_power_w < 0 else "importing"
-                style = "green" if data.active_power_w < 0 else "red" if color else None
-                console.print(f"{data.active_power_w} W  ({direction})", style=style)
-                if sparkline:
-                    console.print(f"          {_sparkline(list(values))}")
+                    values.append(data.active_power_w)
 
-            if watch is None:
-                break
+                if until and evaluate_until(data.model_dump(), until):
+                    console.print(f"Condition met: {until}", style="green")
+                    if dispatcher.configured:
+                        await dispatcher.dispatch(until, data.model_dump())
+                    if watch is None or not dispatcher.configured:
+                        raise typer.Exit(code=10)
 
-            await asyncio.sleep(watch)
+                if full:
+                    imported = max(data.active_power_w, 0)
+                    exported = abs(min(data.active_power_w, 0))
+                    style = (
+                        "green" if data.active_power_w < 0 else "red" if color else None
+                    )
+                    console.print(f"Net:      {data.active_power_w} W", style=style)
+                    console.print(f"Import:     {imported} W")
+                    console.print(f"Export:    {exported} W")
+                    if data.active_voltage_l1_v:
+                        console.print(f"Voltage:  {data.active_voltage_l1_v} V")
+                    if data.active_current_l1_a:
+                        console.print(f"Current:  {data.active_current_l1_a} A")
+                    if sparkline:
+                        console.print(f"Trend:    {_sparkline(list(values))}")
+                elif format_str != "auto" or not console.is_terminal:
+                    write_data(data, output_format, console)
+                else:
+                    direction = "exporting" if data.active_power_w < 0 else "importing"
+                    style = (
+                        "green" if data.active_power_w < 0 else "red" if color else None
+                    )
+                    console.print(f"{data.active_power_w} W  ({direction})", style=style)
+                    if sparkline:
+                        console.print(f"          {_sparkline(list(values))}")
+
+                if watch is None:
+                    break
+
+                await asyncio.sleep(watch)
+        finally:
+            if store:
+                store.close()

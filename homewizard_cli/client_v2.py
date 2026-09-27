@@ -5,7 +5,7 @@ import contextlib
 import logging
 import ssl
 from pathlib import Path
-from typing import TypeVar
+from typing import Type, TypeVar
 
 import httpx
 from pydantic import BaseModel
@@ -31,13 +31,22 @@ def _create_ssl_context(
         ctx.check_hostname = False
         ctx.verify_mode = ssl.CERT_NONE
         return ctx
-    # Load bundled cert first
+    # Load bundled cert first (tolerate a broken placeholder so client
+    # construction never crashes — CRIT-1)
     if HOMEWIZARD_CA_CERT and "BEGIN CERTIFICATE" in HOMEWIZARD_CA_CERT:
-        ctx.load_verify_locations(cadata=HOMEWIZARD_CA_CERT)
-        ctx.verify_flags |= ssl.VERIFY_X509_PARTIAL_CHAIN
-    # Allow user override
+        try:
+            ctx.load_verify_locations(cadata=HOMEWIZARD_CA_CERT)
+            ctx.verify_flags |= ssl.VERIFY_X509_PARTIAL_CHAIN
+        except ssl.SSLError:
+            log.warning("Bundled HomeWizard CA cert is invalid; ignoring it")
+    # Allow user override (also tolerant — a truncated download must not crash)
     if CA_CERT_PATH.exists():
-        ctx.load_verify_locations(CA_CERT_PATH)
+        try:
+            ctx.load_verify_locations(CA_CERT_PATH)
+        except ssl.SSLError:
+            log.warning(
+                "User CA cert at %s is invalid; ignoring it", CA_CERT_PATH
+            )
     if identifier and verify_cert:
         ctx.hostname_checks_common_name = True
     return ctx
@@ -61,7 +70,7 @@ class P1ClientV2:
         self.identifier = identifier
         if not verify_cert:
             log.warning("SSL verification disabled — connections are insecure.")
-        proxy_url = _get_proxy_url(proxy, host)
+        proxy_url = _get_proxy_url(proxy, host, scheme="https")
         ssl_ctx = _create_ssl_context(verify_cert, identifier=identifier)
         headers = {"X-Api-Version": "2"}
         if token:
@@ -106,11 +115,11 @@ class P1ClientV2:
                 raise HttpError(code, str(e.request.url)) from e
         raise last_error
 
-    async def get_json_v2(self, path: str, model: type[T]) -> T:
+    async def get_json_v2(self, path: str, model: Type[T]) -> T:
         text = await self.get(path)
         return model.model_validate_json(text)
 
-    async def get_json(self, path: str, model: type[T]) -> T:
+    async def get_json(self, path: str, model: Type[T]) -> T:
         """Alias for get_json_v2 — same interface as P1Client.get_json."""
         return await self.get_json_v2(path, model)
 

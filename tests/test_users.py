@@ -124,3 +124,36 @@ def test_users_delete_error():
         )
         assert result.exit_code == 3
         assert "HTTP 500" in result.output
+
+
+def test_users_delete_url_encodes_name():
+    from unittest.mock import AsyncMock, patch
+
+    with patch("homewizard_cli.commands.users.P1ClientV2") as mock_cls:
+        instance = AsyncMock()
+        mock_cls.return_value = instance
+        instance.__aenter__ = AsyncMock(return_value=instance)
+        instance.__aexit__ = AsyncMock(return_value=False)
+        instance.delete = AsyncMock(return_value={})
+
+        result = runner.invoke(
+            app,
+            [
+                "users",
+                "delete",
+                "--name",
+                "a b&c",
+                "--api-version",
+                "v2",
+                "--host",
+                "192.168.1.1",
+                "--token",
+                "t",
+            ],
+        )
+        assert result.exit_code == 0, result.output
+        instance.delete.assert_called_once()
+        assert "/api/user?name=" in instance.delete.call_args.args[0]
+        # 'a b&c' must be percent-encoded, not raw
+        assert "a%20b%26c" in instance.delete.call_args.args[0]
+        assert "a b&c" not in instance.delete.call_args.args[0]

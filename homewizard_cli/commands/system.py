@@ -4,7 +4,6 @@ import asyncio
 
 import typer
 
-from ..util import _dumps_json
 from rich.console import Console
 from rich.table import Table
 
@@ -12,6 +11,7 @@ from ..client_factory import API_VERSIONS, resolve_client
 from ..config import resolve_host
 from ..models import SystemResponse
 from ..models.v2 import SystemV2
+from ..util import _print_json
 
 app = typer.Typer()
 
@@ -89,7 +89,7 @@ async def _system_async(
                 if led_brightness is not None:
                     body["status_led_brightness_pct"] = led_brightness
                 result = await c.put_json("/api/system", body)
-                console.print(_dumps_json(result, indent=True))
+                _print_json(console, result, indent=True)
             else:
                 s = await c.get_json_v2("/api/system", SystemV2)
                 t = Table(show_header=True, header_style="bold magenta")

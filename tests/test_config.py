@@ -1,5 +1,7 @@
 from unittest.mock import patch
 
+import pytest
+
 from homewizard_cli.config import (
     DEFAULT_FORMAT,
     DEFAULT_HOST,
@@ -231,5 +233,21 @@ def test_resolve_host_explicit():
 
 
 def test_resolve_host_no_host_no_config():
+    """No host anywhere raises DeviceNotFoundError instead of a cryptic
+    socket error at connect time (LOW-12)."""
+    from homewizard_cli.errors import DeviceNotFoundError
+
     with patch("pathlib.Path.exists", return_value=False):
-        assert resolve_host(None) == ""
+        with pytest.raises(DeviceNotFoundError):
+            resolve_host(None)
+
+
+def test_resolve_host_no_host_raises_guidance():
+    """LOW-12: empty host must raise DeviceNotFoundError with actionable guidance."""
+    from homewizard_cli.errors import DeviceNotFoundError
+
+    with patch("pathlib.Path.exists", return_value=False):
+        with pytest.raises(DeviceNotFoundError) as exc_info:
+            resolve_host(None)
+    assert "--host" in str(exc_info.value)
+    assert exc_info.value.code == 2

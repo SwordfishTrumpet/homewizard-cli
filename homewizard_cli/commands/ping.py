@@ -1,5 +1,6 @@
 """homewizard-cli ping command — ICMP echo check."""
 
+import platform
 import re
 import subprocess  # nosec: B404
 
@@ -11,6 +12,17 @@ from ..config import resolve_host
 app = typer.Typer()
 
 _TIME_RE = re.compile(r"time=([0-9.]+)\s*ms")
+
+
+def _ping_args(timeout: int, host: str) -> list[str]:
+    """Build platform-correct ping flags (LOW-10).
+
+    GNU ping uses ``-W`` in whole seconds; macOS/BSD use ``-W`` in
+    milliseconds plus ``-t`` for the overall timeout.
+    """
+    if platform.system() == "Darwin":
+        return ["ping", "-c", "1", "-t", str(timeout), "-W", str(timeout * 1000), host]
+    return ["ping", "-c", "1", "-W", str(timeout), host]
 
 
 @app.callback(invoke_without_command=True)
@@ -26,7 +38,7 @@ def ping(
     console = Console()
     try:
         result = subprocess.run(  # nosec
-            ["ping", "-c", "1", "-W", str(timeout), host],
+            _ping_args(timeout, host),
             capture_output=True,
             text=True,
             timeout=timeout + 2,

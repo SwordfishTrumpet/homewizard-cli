@@ -90,8 +90,11 @@ class PersistentMqttClient:
             self._disconnect()
             return False
 
-    async def publish(self, data: DataResponse) -> bool:
-        payload = _dumps_json(data.model_dump(), indent=True)
+    async def publish(self, data: DataResponse | dict) -> bool:
+        if isinstance(data, dict):
+            payload = _dumps_json(data, indent=True)
+        else:
+            payload = _dumps_json(data.model_dump(), indent=True)
         success = await asyncio.to_thread(self._publish_sync, payload)
         if not success:
             self._buffer.append(payload)

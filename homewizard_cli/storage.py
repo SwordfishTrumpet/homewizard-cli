@@ -60,10 +60,17 @@ def _parse_datetime(value: str | datetime | None) -> str | None:
 
 
 class MeasurementStore:
-    """SQLite-backed store for energy measurements."""
+    """SQLite-backed store for energy measurements.
 
-    def __init__(self, db_path: str | None) -> None:
+    ``commit_batch`` batches ``INSERT`` commits (PERF-2/LOW-6): watch/export
+    loops previously did one disk-sync COMMIT per poll. Uncommitted rows are
+    flushed by ``close()`` (and by ``retain()``/``vacuum()``).
+    """
+
+    def __init__(self, db_path: str | None, commit_batch: int = 50) -> None:
         self.db_path = db_path
+        self._commit_batch = max(1, commit_batch)
+        self._pending = 0
         if db_path is None:
             self._conn = None
             return
@@ -73,6 +80,12 @@ class MeasurementStore:
         self._conn.execute("PRAGMA busy_timeout=5000")
         self._init_schema()
         self._columns: list[str] | None = None
+
+    def _commit_pending(self) -> None:
+        """Flush any batched inserts (no-op when nothing is pending)."""
+        if self._conn is not None and self._pending:
+            self._conn.commit()
+            self._pending = 0
 
     def _init_schema(self) -> None:
         if self._conn is None:
@@ -129,7 +142,9 @@ class MeasurementStore:
             f"INSERT INTO readings ({col_list}) VALUES ({placeholders})",  # nosec: col_list from PRAGMA
             values,
         )
-        self._conn.commit()
+        self._pending += 1
+        if self._pending >= self._commit_batch:
+            self._commit_pending()
 
     def query(
         self,
@@ -306,11 +321,13 @@ class MeasurementStore:
     def vacuum(self) -> None:
         if self._conn is None:
             return
+        self._commit_pending()
         self._conn.execute("VACUUM")
 
     def retain(self, days: int) -> int:
         if self._conn is None:
             return 0
+        self._commit_pending()
         cutoff = (datetime.now() - timedelta(days=days)).isoformat()
         cursor = self._conn.execute(
             "DELETE FROM readings WHERE stored_at < :cutoff",
@@ -331,6 +348,7 @@ class MeasurementStore:
 
     def close(self) -> None:
         if self._conn is not None:
+            self._commit_pending()
             self._conn.close()
             self._conn = None
 

@@ -4,8 +4,9 @@ import asyncio
 
 import typer
 
-from ..util import _dumps_json
 from rich.console import Console
+
+from ..util import _print_json
 
 from ..client_v2 import P1ClientV2
 from ..config import resolve_host, resolve_no_verify, resolve_token
@@ -89,7 +90,7 @@ async def _state_async(
 
             if payload:
                 result = await c.put_json("/api/state", payload)
-                console.print(_dumps_json(result, indent=True))
+                _print_json(console, result, indent=True)
             else:
                 s = await c.get_json_v2("/api/state", StateResponse)
                 console.print(s.model_dump_json(indent=2))

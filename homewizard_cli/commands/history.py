@@ -3,7 +3,7 @@
 import asyncio
 from datetime import datetime, timedelta
 
-from ..util import _dumps_json
+from ..util import _print_json
 
 import typer
 from rich.console import Console
@@ -91,7 +91,8 @@ def _compute_comparison(
     # Determine which fields to compare
     compare_fields = fields or []
     if not compare_fields and current_rows:
-        # Pick numeric fields
+        # Pick numeric fields — but only meaningful energy/gas/water counters.
+        # Sums of wifi_strength/smr_version/active_tariff/counts are noise.
         skip = {
             "stored_at",
             "device_serial",
@@ -103,9 +104,29 @@ def _compute_comparison(
             "gas_unique_id",
             "text_message",
             "external",
+            "wifi_strength",
+            "smr_version",
+            "active_tariff",
+        }
+        counters = {
+            "total_power_import_kwh",
+            "total_power_import_t1_kwh",
+            "total_power_import_t2_kwh",
+            "total_power_import_t3_kwh",
+            "total_power_import_t4_kwh",
+            "total_power_export_kwh",
+            "total_power_export_t1_kwh",
+            "total_power_export_t2_kwh",
+            "total_power_export_t3_kwh",
+            "total_power_export_t4_kwh",
+            "total_gas_m3",
         }
         for k in current_rows[0]:
-            if k not in skip and isinstance(current_rows[0][k], (int, float)):
+            if (
+                k not in skip
+                and k in counters
+                and isinstance(current_rows[0][k], (int, float))
+            ):
                 compare_fields.append(k)
 
     results = []
@@ -228,7 +249,7 @@ async def _history_async(
         if list_devices:
             devices = store.list_devices()
             if format == "json":
-                console.print(_dumps_json(devices, indent=True))
+                _print_json(console, devices, indent=True)
             else:
                 t = Table(show_header=True, header_style="bold magenta")
                 t.add_column("Device Serial", style="cyan")
@@ -240,7 +261,7 @@ async def _history_async(
         if info:
             meta = store.info()
             if format == "json":
-                console.print(_dumps_json(meta, indent=True))
+                _print_json(console, meta, indent=True)
             else:
                 console.print(f"Database:    {db}")
                 console.print(f"Size:        {_format_file_size(meta['file_size_bytes'])}")
@@ -298,7 +319,7 @@ async def _history_async(
             return
 
         if format == "json":
-            console.print(_dumps_json(rows, indent=True))
+            _print_json(console, rows, indent=True)
         elif format == "csv":
             _print_csv(rows, console)
         elif format == "tsv":
@@ -362,7 +383,7 @@ def _run_comparison(
         return
 
     if format == "json":
-        console.print(_dumps_json(comparison, indent=True))
+        _print_json(console, comparison, indent=True)
     else:
         t = Table(show_header=True, header_style="bold magenta")
         t.add_column("Field", style="cyan")
@@ -400,22 +421,32 @@ def _print_table(rows: list[dict], console: Console) -> None:
     console.print(t)
 
 
+def _csv_escape(v: object, tsv: bool = False) -> str:
+    """Escape a value for CSV/TSV output (LOW-4)."""
+    s = _format_value(v)
+    if tsv:
+        s = s.replace("\t", "    ")
+    if any(c in s for c in ',"\n\r'):
+        return '"' + s.replace('"', '""') + '"'
+    return s
+
+
 def _print_csv(rows: list[dict], console: Console) -> None:
     if not rows:
         return
     headers = list(rows[0].keys())
-    console.print(",".join(headers))
+    console.print(",".join(_csv_escape(h) for h in headers))
     for row in rows:
-        console.print(",".join(_format_value(row[h]) for h in headers))
+        console.print(",".join(_csv_escape(row[h]) for h in headers))
 
 
 def _print_tsv(rows: list[dict], console: Console) -> None:
     if not rows:
         return
     headers = list(rows[0].keys())
-    console.print("\t".join(headers))
+    console.print("\t".join(_csv_escape(h, tsv=True) for h in headers))
     for row in rows:
-        console.print("\t".join(_format_value(row[h]) for h in headers))
+        console.print("\t".join(_csv_escape(row[h], tsv=True) for h in headers))
 
 
 def _format_file_size(bytes_val: int) -> str:

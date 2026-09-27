@@ -59,3 +59,30 @@ def test_ping_quiet():
         result = runner.invoke(app, ["ping", "--quiet", "--host", "192.168.1.1"])
         assert result.exit_code == 0
         assert result.output == ""
+
+
+def test_ping_args_linux():
+    from unittest.mock import patch
+
+    from homewizard_cli.commands.ping import _ping_args
+
+    with patch("homewizard_cli.commands.ping.platform.system", return_value="Linux"):
+        assert _ping_args(3, "1.2.3.4") == ["ping", "-c", "1", "-W", "3", "1.2.3.4"]
+
+
+def test_ping_args_macos():
+    from unittest.mock import patch
+
+    from homewizard_cli.commands.ping import _ping_args
+
+    with patch("homewizard_cli.commands.ping.platform.system", return_value="Darwin"):
+        assert _ping_args(3, "1.2.3.4") == [
+            "ping",
+            "-c",
+            "1",
+            "-t",
+            "3",
+            "-W",
+            "3000",
+            "1.2.3.4",
+        ]

@@ -21,4 +21,4 @@ def write_template(data: DataResponse, console: Console, template: str = ""):
         return str(value)
 
     output = _TEMPLATE_RE.sub(_replace, template)
-    console.print(output)
+    console.print(output, soft_wrap=True)

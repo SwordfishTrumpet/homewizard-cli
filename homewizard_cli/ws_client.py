@@ -1,25 +1,11 @@
 """WebSocket client for HomeWizard API v2 real-time push updates."""
 
 import asyncio
-import ssl
-from pathlib import Path
 from typing import Any
 
+from .client_v2 import _create_ssl_context
 from .errors import P1Error
 from .util import _loads_json
-
-CA_CERT_PATH = Path.home() / ".config" / "homewizard-cli" / "homewizard-ca.pem"
-
-
-def _create_ssl_context(verify_cert: bool = True) -> ssl.SSLContext:
-    ctx = ssl.create_default_context()
-    if not verify_cert:
-        ctx.check_hostname = False
-        ctx.verify_mode = ssl.CERT_NONE
-        return ctx
-    if CA_CERT_PATH.exists():
-        ctx.load_verify_locations(CA_CERT_PATH)
-    return ctx
 
 
 class WebSocketClient:

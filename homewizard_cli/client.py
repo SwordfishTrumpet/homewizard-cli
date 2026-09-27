@@ -3,7 +3,7 @@
 import asyncio
 import contextlib
 import os
-from typing import TypeVar
+from typing import Type, TypeVar
 
 import httpx
 from pydantic import BaseModel
@@ -23,12 +23,27 @@ def _proxy_excluded(host: str) -> bool:
 
 
 def _get_proxy_url(
-    explicit_proxy: str | None = None, host: str | None = None
+    explicit_proxy: str | None = None,
+    host: str | None = None,
+    scheme: str = "http",
 ) -> str | None:
+    """Resolve the proxy URL for a request.
+
+    ``explicit_proxy`` wins. Otherwise env vars are consulted; for HTTPS
+    traffic HTTPS_PROXY/https_proxy are preferred, for HTTP traffic
+    HTTP_PROXY/http_proxy first (MED-2). NO_PROXY exact-match is honored.
+    """
     if explicit_proxy:
         return explicit_proxy
     if host and _proxy_excluded(host):
         return None
+    if scheme == "https":
+        return (
+            os.environ.get("HTTPS_PROXY")
+            or os.environ.get("https_proxy")
+            or os.environ.get("HTTP_PROXY")
+            or os.environ.get("http_proxy")
+        )
     return (
         os.environ.get("HTTP_PROXY")
         or os.environ.get("http_proxy")
@@ -83,12 +98,12 @@ class P1Client:
                 raise HttpError(e.response.status_code, str(e.request.url)) from e
         raise last_error
 
-    async def get_json(self, path: str, model: type[T]) -> T:
+    async def get_json(self, path: str, model: Type[T]) -> T:
         """GET request returning parsed Pydantic model."""
         text = await self.get(path)
         return model.model_validate_json(text)
 
-    async def get_json_v2(self, path: str, model: type[T]) -> T:
+    async def get_json_v2(self, path: str, model: Type[T]) -> T:
         """Alias for get_json — same interface as P1ClientV2.get_json_v2."""
         return await self.get_json(path, model)
 

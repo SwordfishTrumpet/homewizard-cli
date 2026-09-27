@@ -78,3 +78,12 @@ def test_hass_rest():
         assert '"sensor":' in result.output
         assert "rest" in result.output
         assert "https://192.168.1.1/api/measurement" in result.output
+
+
+def test_sensor_fields_exist_in_measurement_model():
+    """MED-4: every hass sensor field must exist on the Measurement model."""
+    from homewizard_cli.commands.hass import _SENSOR_FIELD
+    from homewizard_cli.models import Measurement
+
+    missing = [f for f in _SENSOR_FIELD.values() if f not in Measurement.model_fields]
+    assert missing == [], f"hass references missing fields: {missing}"

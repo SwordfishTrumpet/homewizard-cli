@@ -15,12 +15,12 @@ from ..alerting import AlertDispatcher
 from ..client_factory import API_VERSIONS, resolve_client
 from ..config import load_config, resolve_host
 from ..errors import P1Error
-from ..expr import evaluate_until
+from ..expr import evaluate_until, is_valid_expression
 from ..format import Format, get_format, write_data
 from ..models import Measurement
 from ..state import DeltaTracker
 from ..storage import _setup_store
-from ..util import _dumps_json
+from ..util import _dumps_json, _print_json
 
 app = typer.Typer()
 
@@ -73,6 +73,7 @@ class _MetricsServer:
         writer.write(response.encode())
         await writer.drain()
         writer.close()
+        await writer.wait_closed()
 
     def _format_metrics(self) -> str:
         lines = [
@@ -270,6 +271,13 @@ async def _export_async(
             style="yellow",
         )
     output_format = get_format(format, console.is_terminal)
+    if until and not is_valid_expression(until):
+        console.print(
+            f"Invalid --until expression: {until}\n"
+            "         Expected e.g. 'active_power_w > 500 AND total_gas_m3 < 10'.",
+            style="red",
+        )
+        raise typer.Exit(code=5)
 
     webhook_urls = [alert_webhook] if alert_webhook else None
     alert_commands = [alert_cmd] if alert_cmd else None
@@ -450,8 +458,10 @@ async def _export_async(
                         continue
                     tracker.update(data.model_dump())
 
+                payload_dict = data.model_dump()
+
                 if delta and delta_tracker is not None:
-                    changes = delta_tracker.update(data.model_dump())
+                    changes = delta_tracker.update(payload_dict)
                     if changes:
                         from rich.table import Table
 
@@ -468,46 +478,46 @@ async def _export_async(
                                 ),
                             )
                         console.print(t)
+                    if mqtt_client is None:
+                        if watch is None:
+                            break
+                        with contextlib.suppress(TimeoutError):
+                            await asyncio.wait_for(shutdown_event.wait(), timeout=watch)
+                        continue
+
+                filtered = _filter_fields(data, fields)
+                if filtered is not None and not filtered:
+                    # Every requested field was excluded/unknown — nothing to emit
                     if watch is None:
                         break
                     with contextlib.suppress(TimeoutError):
                         await asyncio.wait_for(shutdown_event.wait(), timeout=watch)
                     continue
 
-                filtered = _filter_fields(data, fields)
-                if filtered:
-                    if output_format == Format.TABLE:
-                        from rich.table import Table
-
-                        t = Table(show_header=True, header_style="bold magenta")
-                        t.add_column("Field", style="cyan")
-                        t.add_column("Value", style="green")
-                        for k, v in filtered.items():
-                            t.add_row(k, str(v))
-                        console.print(t)
-                    else:
-                        console.print(_dumps_json(filtered, indent=True))
-                    if file_handle:
-                        from io import StringIO
-
-                        buf = StringIO()
-                        file_console = Console(file=buf, force_terminal=False)
-                        file_console.print(_dumps_json(filtered, indent=True))
-                        _safe_write(buf.getvalue())
-                    if watch is not None:
-                        with contextlib.suppress(TimeoutError):
-                            await asyncio.wait_for(shutdown_event.wait(), timeout=watch)
-                        continue
-                    break
-
                 try:
                     if mqtt_client is not None:
-                        ok = await mqtt_client.publish(data)
+                        payload = filtered if filtered is not None else data
+                        ok = await mqtt_client.publish(payload)
                         if not ok:
                             console.print(
                                 f"MQTT publish failed ({mqtt_client.pending} buffered)",
                                 style="yellow",
                             )
+                    elif filtered is not None:
+                        if not file:
+                            if output_format == Format.TABLE:
+                                from rich.table import Table
+
+                                t = Table(show_header=True, header_style="bold magenta")
+                                t.add_column("Field", style="cyan")
+                                t.add_column("Value", style="green")
+                                for k, v in filtered.items():
+                                    t.add_row(k, str(v))
+                                console.print(t)
+                            else:
+                                _print_json(console, filtered, indent=True)
+                        if file_handle:
+                            _safe_write(_dumps_json(filtered, indent=True) + "\n")
                     else:
                         if file_handle:
                             _check_rotation()
