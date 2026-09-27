@@ -94,4 +94,4 @@ def write_raw(data: Measurement, console: Console):
     # DSMR spec: CRC covers the telegram up to and INCLUDING '!'
     crc_val = _crc16(telegram_text.encode("ascii"))
     telegram_text += f"{crc_val:04X}"
-    console.print(telegram_text)
+    console.print(telegram_text, soft_wrap=True)

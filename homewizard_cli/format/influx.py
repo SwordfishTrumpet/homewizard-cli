@@ -40,4 +40,4 @@ def write_influx(data: DataResponse, console: Console):
     fields += f",total_power_export_kwh={data.total_power_export_kwh}"
     if data.total_gas_m3 is not None:
         fields += f",total_gas_m3={data.total_gas_m3}"
-    console.print(f"p1_meter,{tags} {fields} {timestamp_ns}")
+    console.print(f"p1_meter,{tags} {fields} {timestamp_ns}", soft_wrap=True)
