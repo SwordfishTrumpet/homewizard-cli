@@ -12,6 +12,7 @@ from ..config import resolve_host
 from ..expr import evaluate_until, is_valid_expression
 from ..format import get_format, write_data
 from ..models import Measurement
+from ..state import Aggregator
 from ..storage import _setup_store
 
 _CHARS = ["▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"]
@@ -38,6 +39,11 @@ def power(
     color: bool = typer.Option(False, "--color", help="Color output by import/export"),
     sparkline: bool = typer.Option(
         False, "--sparkline", help="Show sparkline of recent power readings"
+    ),
+    agg: bool = typer.Option(
+        False,
+        "--agg",
+        help="Show rolling aggregates (mean/min/max/stddev) when watching",
     ),
     format: str = typer.Option("auto", "--format", "-f", help="Output format"),
     host: str | None = typer.Option(None, "--host", "-H", help="P1 meter IP"),
@@ -91,6 +97,7 @@ def power(
             alert_cmd=alert_cmd,
             alert_cooldown=alert_cooldown,
             db=db,
+            agg=agg,
         )
     )
 
@@ -112,6 +119,7 @@ async def _power_async(
     alert_cmd: str | None = None,
     alert_cooldown: float = 0.0,
     db: str | None = None,
+    agg: bool = False,
 ):
     console = Console()
     host = resolve_host(host)
@@ -138,6 +146,7 @@ async def _power_async(
         cooldown_seconds=alert_cooldown,
     )
     values: deque[float] = deque(maxlen=20)
+    aggregator = Aggregator() if agg else None
 
     client = resolve_client(
         api_version,
@@ -169,6 +178,20 @@ async def _power_async(
                         await dispatcher.dispatch(until, data.model_dump())
                     if watch is None or not dispatcher.configured:
                         raise typer.Exit(code=10)
+
+                if aggregator is not None:
+                    agg_dict = aggregator.update(data.model_dump())
+                    if agg_dict:
+                        console.print(
+                            f"Power: mean {agg_dict['active_power_w_mean']:.1f} W  "
+                            f"min {agg_dict['active_power_w_min']:.1f} W  "
+                            f"max {agg_dict['active_power_w_max']:.1f} W  "
+                            f"stddev {agg_dict['active_power_w_stddev']:.1f} W"
+                        )
+                        if watch is None:
+                            break
+                        await asyncio.sleep(watch)
+                        continue
 
                 if full:
                     imported = max(data.active_power_w, 0)

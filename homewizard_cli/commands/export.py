@@ -18,7 +18,7 @@ from ..errors import P1Error
 from ..expr import evaluate_until, is_valid_expression
 from ..format import Format, get_format, write_data
 from ..models import Measurement
-from ..state import DeltaTracker
+from ..state import Aggregator, DeltaTracker
 from ..storage import _setup_store
 from ..util import _dumps_json, _print_json
 
@@ -148,6 +148,11 @@ def export(
     delta: bool | None = typer.Option(
         None, "--delta", help="Show only changed fields (requires --watch)"
     ),
+    agg: bool = typer.Option(
+        False,
+        "--agg",
+        help="Show rolling aggregates (mean/min/max/stddev) when watching",
+    ),
     until: str | None = typer.Option(
         None, "--until", help="Exit when expression is true"
     ),
@@ -200,6 +205,7 @@ def export(
             skip_unchanged=skip_unchanged,
             fields=fields,
             delta=delta,
+            agg=agg,
             until=until,
             metrics_port=metrics_port,
             pid_file=pid_file,
@@ -236,6 +242,7 @@ async def _export_async(
     skip_unchanged: bool | None = None,
     fields: str | None = None,
     delta: bool | None = None,
+    agg: bool = False,
     until: str | None = None,
     metrics_port: int | None = None,
     pid_file: str | None = None,
@@ -387,6 +394,7 @@ async def _export_async(
         if (delta and fields)
         else (DeltaTracker() if delta else None)
     )
+    aggregator = Aggregator() if agg else None
 
     mqtt_client = None
     if format == "mqtt":
@@ -450,6 +458,32 @@ async def _export_async(
                         await dispatcher.dispatch(until, data.model_dump())
                     if watch is None or not dispatcher.configured:
                         raise typer.Exit(code=10)
+
+                if aggregator is not None:
+                    agg_dict = aggregator.update(data.model_dump())
+                    if agg_dict:
+                        merged = {**data.model_dump(), **agg_dict}
+                        if mqtt_client is not None:
+                            ok = await mqtt_client.publish(merged)
+                            if not ok:
+                                console.print(
+                                    f"MQTT publish failed "
+                                    f"({mqtt_client.pending} buffered)",
+                                    style="yellow",
+                                )
+                        else:
+                            if file_handle:
+                                _check_rotation()
+                                _safe_write(_dumps_json(merged, indent=True) + "\n")
+                            if not file:
+                                _print_json(console, merged, indent=True)
+                        if watch is None:
+                            break
+                        with contextlib.suppress(TimeoutError):
+                            await asyncio.wait_for(
+                                shutdown_event.wait(), timeout=watch
+                            )
+                        continue
 
                 if tracker is not None:
                     is_first = not tracker._previous
