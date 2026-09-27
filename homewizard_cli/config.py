@@ -178,11 +178,25 @@ def validate_config() -> list[str]:
 
 
 def resolve_host(host: str | None) -> str:
-    """Return host from CLI arg, config file, or default."""
+    """Return host from CLI arg, config file, or default.
+
+    Raises DeviceNotFoundError (exit code 2) when no host is configured
+    anywhere, instead of letting the client fail with a cryptic socket
+    error at connect time (LOW-12).
+    """
     if host is not None:
         return host
     cfg = load_config()
-    return cfg.host or DEFAULT_HOST
+    resolved = cfg.host or DEFAULT_HOST
+    if not resolved:
+        from .errors import DeviceNotFoundError
+
+        raise DeviceNotFoundError(
+            "No P1 meter host configured",
+            "Use --host <ip>, set 'host' in config.toml ([default] section), "
+            "or run 'homewizard-cli discover'.",
+        )
+    return resolved
 
 
 def resolve_token(token: str | None) -> str | None:

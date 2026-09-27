@@ -1,5 +1,6 @@
 """Tests for MeasurementStore — SQLite-backed historical storage."""
 
+import contextlib
 import json
 import os
 import sqlite3
@@ -365,3 +366,38 @@ class TestMeasurementStore:
         assert "external" in cols
         assert cols["stored_at"] == "TEXT NOT NULL"
         assert "REAL" in cols["active_power_w"]
+
+
+class TestBatchedCommits:
+    def test_commit_batches_inserts(self, tmp_path):
+        """LOW-6/PERF-2: commits are batched; close() flushes pending rows."""
+        db_path = str(tmp_path / "batched.db")
+        store = MeasurementStore(db_path, commit_batch=3)
+        try:
+            for _ in range(5):
+                store.append(_sample_data(), "DEV001")
+            # 5 inserts with batch=3 => 2 uncommitted rows pending
+            assert store._pending == 2
+            store.close()
+            assert store._pending == 0
+            # a fresh connection sees all rows (close() flushed)
+            store2 = MeasurementStore(db_path)
+            try:
+                rows = store2.query()
+                assert len(rows) == 5
+            finally:
+                store2.close()
+        finally:
+            with contextlib.suppress(Exception):
+                store.close()
+
+    def test_batch_1_commits_every_insert(self, tmp_path):
+        db_path = str(tmp_path / "batch1.db")
+        store = MeasurementStore(db_path, commit_batch=1)
+        try:
+            for _ in range(3):
+                store.append(_sample_data(), "DEV001")
+            # commit_batch=1 keeps the legacy per-row commit behavior
+            assert store._pending == 0
+        finally:
+            store.close()

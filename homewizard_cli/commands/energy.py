@@ -67,37 +67,47 @@ async def _energy_async(
     )
     async with client as c:
         store, serial = await _setup_store(db, api_version, c)
-        if api_version == "v2":
-            data = await c.get_json_v2("/api/measurement", Measurement)
-        else:
-            data = await c.get_json("/api/v1/data", Measurement)
-        if store and serial:
-            store.append(data.model_dump(), serial)
+        try:
+            if api_version == "v2":
+                data = await c.get_json_v2("/api/measurement", Measurement)
+            else:
+                data = await c.get_json("/api/v1/data", Measurement)
+            if store and serial:
+                store.append(data.model_dump(), serial)
 
-        net = data.total_power_import_kwh - data.total_power_export_kwh
-        direction = "consumed" if net >= 0 else "produced"
+            net = data.total_power_import_kwh - data.total_power_export_kwh
+            direction = "consumed" if net >= 0 else "produced"
 
-        console.print(f"Import:  {data.total_power_import_kwh:,.2f} kWh")
-        console.print(f"Export:  {data.total_power_export_kwh:,.2f} kWh")
-        console.print(f"Net:     {abs(net):,.2f} kWh {direction}")
+            console.print(f"Import:  {data.total_power_import_kwh:,.2f} kWh")
+            console.print(f"Export:  {data.total_power_export_kwh:,.2f} kWh")
+            console.print(f"Net:     {abs(net):,.2f} kWh {direction}")
 
-        if tariffs:
-            console.print("")
-            console.print(
-                f"T1 (peak):     Import: {data.total_power_import_t1_kwh:,.2f}  "
-                f"Export: {data.total_power_export_t1_kwh:,.2f}"
-            )
-            console.print(
-                f"T2 (off-peak): Import: {data.total_power_import_t2_kwh:,.2f}  "
-                f"Export: {data.total_power_export_t2_kwh:,.2f}"
-            )
-            if data.total_power_import_t3_kwh is not None:
+            if tariffs:
+                console.print("")
                 console.print(
-                    f"T3:            Import: {data.total_power_import_t3_kwh:,.2f}  "
-                    f"Export: {data.total_power_export_t3_kwh:,.2f}"
+                    f"T1 (peak):     Import: {data.total_power_import_t1_kwh:,.2f}  "
+                    f"Export: {data.total_power_export_t1_kwh:,.2f}"
                 )
-            if data.total_power_import_t4_kwh is not None:
                 console.print(
-                    f"T4:            Import: {data.total_power_import_t4_kwh:,.2f}  "
-                    f"Export: {data.total_power_export_t4_kwh:,.2f}"
+                    f"T2 (off-peak): Import: {data.total_power_import_t2_kwh:,.2f}  "
+                    f"Export: {data.total_power_export_t2_kwh:,.2f}"
                 )
+                if (
+                    data.total_power_import_t3_kwh is not None
+                    or data.total_power_export_t3_kwh is not None
+                ):
+                    console.print(
+                        f"T3:            Import: {data.total_power_import_t3_kwh or 0.0:,.2f}  "
+                        f"Export: {data.total_power_export_t3_kwh or 0.0:,.2f}"
+                    )
+                if (
+                    data.total_power_import_t4_kwh is not None
+                    or data.total_power_export_t4_kwh is not None
+                ):
+                    console.print(
+                        f"T4:            Import: {data.total_power_import_t4_kwh or 0.0:,.2f}  "
+                        f"Export: {data.total_power_export_t4_kwh or 0.0:,.2f}"
+                    )
+        finally:
+            if store:
+                store.close()

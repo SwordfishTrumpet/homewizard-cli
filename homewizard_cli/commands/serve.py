@@ -28,16 +28,33 @@ def _create_app(
     token: str | None = None,
     no_verify: bool = False,
 ) -> Any:
-    from fastapi import FastAPI
+    from contextlib import asynccontextmanager
 
-    fastapi_app = FastAPI(title="homewizard-cli Proxy")
-    _cache: dict[str, tuple[float, Any]] = {}
+    from fastapi import FastAPI
 
     protocol = "https" if api_version == "v2" else "http"
     headers = {}
     if token:
         headers["Authorization"] = f"Bearer {token}"
     ssl_ctx = _create_ssl_context(not no_verify) if api_version == "v2" else True
+
+    # One shared client per app lifetime (MED-3/PERF-1): avoids a fresh
+    # TCP+TLS handshake per proxied request and honors --proxy.
+    shared_client = httpx.AsyncClient(
+        timeout=httpx.Timeout(client_timeout),
+        headers=headers,
+        verify=ssl_ctx,
+        proxy=proxy,
+    )
+
+    @asynccontextmanager
+    async def _lifespan(app: Any):
+        yield
+        await shared_client.aclose()
+
+    fastapi_app = FastAPI(title="homewizard-cli Proxy", lifespan=_lifespan)
+    fastapi_app.state.shared_client = shared_client
+    _cache: dict[str, tuple[float, Any]] = {}
 
     async def _proxy(path: str):
         url = f"{protocol}://{client_host}/{path.lstrip('/')}"
@@ -48,13 +65,8 @@ def _create_app(
             if now - ts < cache_seconds:
                 return data
 
-        async with httpx.AsyncClient(
-            timeout=httpx.Timeout(client_timeout),
-            headers=headers,
-            verify=ssl_ctx,
-        ) as c:
-            resp = await c.get(url)
-            data = resp.json()
+        resp = await shared_client.get(url)
+        data = resp.json()
 
         if cache_seconds > 0:
             _cache[path] = (now, data)

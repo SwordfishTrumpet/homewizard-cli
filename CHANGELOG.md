@@ -5,6 +5,28 @@ All notable changes to homewizard-cli will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] — 2026-08-06
+
+### Fixed
+- **CRIT-1:** invalid bundled CA cert crashed every default v2 connection — bundled cert emptied, SSL context loading made fault-tolerant (`ssl.SSLError` no longer escapes), `ws_client` reuses the same context logic
+- **CRIT-2:** DSMR CRC validation now includes the terminating `!` (per spec + dsmr_parser reference) — `telegram --validate` reports real telegrams as Valid; multi-line OBIS values (power-failure log) parsed correctly
+- `--format mqtt` outside `export` now fails with a clear error instead of a TypeError
+- `export --format mqtt` now publishes when `--fields`/`--delta` is set (previously silent data loss)
+- `MeasurementStore` is now closed in `power`/`energy`/`gas`/`water`/`combined` (SQLite/WAL leak)
+- `serve` now honors `--proxy` and reuses a single httpx client per app lifetime (was: new TCP+TLS per request)
+- global options before a subcommand are no longer silently ignored — a warning points to the correct placement
+- proxy resolution is scheme-aware (HTTPS traffic prefers `HTTPS_PROXY`)
+- `hass` sensors for gas/water now read from the `external` array (v2) instead of a nonexistent `total_water_m3`
+- `users delete --name` URL-encodes the name; `energy --tariffs` no longer crashes when T3/T4 export is absent
+- long JSON lines are no longer wrapped by Rich (was producing invalid JSON for long values)
+- Sphinx API docs build with zero warnings (removed nonexistent module stanzas, disambiguated `type`)
+
+### Changed
+- Dependencies upgraded: typer 0.27.1, fastapi 0.141.1, uvicorn 0.52.1, zeroconf 0.150.0, pytest 9.1.1, syrupy 5.5.3, hypothesis 6.165.2, websockets 17.0.1, pre-commit 4.6.1, codespell 2.4.3; mypy + ruff added to dev deps (ruff pinned 0.11.x)
+- `MeasurementStore` batches commits (default 50 per transaction) — one fsync per batch instead of per poll
+- missing host raises `DeviceNotFoundError` with actionable guidance instead of a cryptic socket error
+- `data --delta` without `--watch`, `--ws --db`, `--agg` formatting, `ping` platform flags, Influx tag escaping, history CSV/TSV escaping — all aligned to documented behavior
+
 ## [0.2.0] — 2026-05-29
 
 ### Added

@@ -99,14 +99,14 @@ Supports both **API v1** (HTTP, port 80, no auth) and **API v2** (HTTPS, port 44
 
 | Component            | Library                   | Version | Purpose                            |
 |----------------------|---------------------------|---------|------------------------------------|
-| CLI framework        | [Typer](https://typer.tiangolo.com/) | 0.26.7+ | Command routing, shell completions |
+| CLI framework        | [Typer](https://typer.tiangolo.com/) | 0.27.1+ | Command routing, shell completions |
 | HTTP client          | [httpx](https://www.python-httpx.org/) | 0.28.1+ | Async HTTP/HTTPS requests          |
 | Data models          | [Pydantic](https://docs.pydantic.dev/) | 2.13.4+ | Response validation, v1↔v2 mapping |
 | Terminal output      | [Rich](https://rich.readthedocs.io/) | 15.0.0+ | Tables, panels, colors, sparklines |
-| mDNS discovery       | [python-zeroconf](https://github.com/python-zeroconf/python-zeroconf) | 0.149.16+ | Network device discovery |
+| mDNS discovery       | [python-zeroconf](https://github.com/python-zeroconf/python-zeroconf) | 0.150.0+ | Network device discovery |
 | Config parsing       | `tomllib` (stdlib)        | — | TOML config file parsing           |
-| Optional: WebSocket  | [websockets](https://websockets.readthedocs.io/) | 16+ | Real-time data push (v2)  |
-| Optional: REST proxy | [FastAPI](https://fastapi.tiangolo.com/) + [uvicorn](https://www.uvicorn.org/) | 0.136.3+ / 0.49.0+ | HTTP proxy server for `/api/*` |
+| Optional: WebSocket  | [websockets](https://websockets.readthedocs.io/) | 17.0.1+ | Real-time data push (v2)  |
+| Optional: REST proxy | [FastAPI](https://fastapi.tiangolo.com/) + [uvicorn](https://www.uvicorn.org/) | 0.141.1+ / 0.52.1+ | HTTP proxy server for `/api/*` |
 | Optional: MQTT       | [paho-mqtt](https://www.eclipse.org/paho/) | 2.1+ | MQTT broker publishing            |
 
 **Design principles:** Single HTTP request per command, async/await throughout, connection reuse, lazy loading of optional deps, never-comment patterns, typed error hierarchy with exit codes.
@@ -1711,8 +1711,11 @@ uv run python -m mypy --check-untyped-defs homewizard_cli/ tests/
 # Run tests
 uv run python -m pytest tests/ -v
 
-# Run tests with clean output (isolated processes — no warnings)
-uv run python -m pytest tests/ --forked -v
+# Run tests (current: 728 passing)
+uv run python -m pytest tests/ -v
+
+# Verify API docs build without warnings
+uv run python -m sphinx -b html docs docs/_build/html
 
 # Run a single test file
 uv run python -m pytest tests/test_commands.py -v

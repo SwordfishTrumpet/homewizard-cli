@@ -91,8 +91,9 @@ async def _discover_all_mdns_for(service: str, timeout: float = 2.0) -> list[dic
     """Discover all devices via given mDNS service."""
     zeroconf = Zeroconf()
     listener = _HostListener()
-    ServiceBrowser(zeroconf, service, listener)
+    browser = ServiceBrowser(zeroconf, service, listener)
     await asyncio.sleep(timeout)
+    browser.cancel()
     zeroconf.close()
     return listener.entries
 
@@ -136,8 +137,8 @@ async def _probe_host_info(
 
 async def discover_all_hosts(timeout: float = 3.0) -> list[dict]:
     """Discover all HomeWizard devices (v1 + v2) and return their info."""
-    entries = await discover_all_mdns(timeout=2.0)
-    entries += await discover_all_mdns_v2(timeout=2.0)
+    entries = await discover_all_mdns(timeout=timeout)
+    entries += await discover_all_mdns_v2(timeout=timeout)
     seen = set()
     results = []
     for entry in entries:
@@ -145,9 +146,9 @@ async def discover_all_hosts(timeout: float = 3.0) -> list[dict]:
         if ip in seen:
             continue
         seen.add(ip)
-        info = await _probe_host_info(ip, timeout=1.0)
+        info = await _probe_host_info(ip, timeout=timeout)
         if not info:
-            info = await _probe_host_info(ip, timeout=1.0, use_https=True)
+            info = await _probe_host_info(ip, timeout=timeout, use_https=True)
         if info:
             results.append(
                 {
@@ -203,13 +204,13 @@ async def discover_host(
             return cached, True
 
     # 3. mDNS discovery (v2 preferred)
-    host = await discover_mdns_v2(timeout=2.0)
+    host = await discover_mdns_v2(timeout=timeout)
     if host:
         _save_cache(host)
         return host, False
 
     # 4. mDNS discovery (v1 fallback)
-    host = await discover_mdns(timeout=2.0)
+    host = await discover_mdns(timeout=timeout)
     if host:
         _save_cache(host)
         return host, False

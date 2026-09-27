@@ -74,6 +74,35 @@ class TestCreateSSLContext:
             ctx.hostname_checks_common_name == default_ctx.hostname_checks_common_name
         )
 
+    def test_verify_with_malformed_bundled_cert_does_not_raise(self):
+        """CRIT-1 regression: a broken/placeholder bundled CA cert must not
+        crash context creation with ssl.SSLError (the live default-v2 crash)."""
+        with patch(
+            "homewizard_cli.client_v2.HOMEWIZARD_CA_CERT",
+            "-----BEGIN CERTIFICATE-----\nMIIBkTCB+wIJAKHBfpE\n-----END CERTIFICATE-----",
+        ):
+            ctx = _create_ssl_context(verify_cert=True)
+            assert ctx.verify_mode == ssl.CERT_REQUIRED
+
+    def test_verify_with_malformed_user_override_does_not_raise(self, tmp_path: Path):
+        """A truncated user-supplied CA file must not crash context creation."""
+        cert_dir = tmp_path / ".config" / "homewizard-cli"
+        cert_dir.mkdir(parents=True)
+        cert_file = cert_dir / "homewizard-ca.pem"
+        cert_file.write_text("-----BEGIN CERTIFICATE-----\ntruncated\n")
+        with (
+            patch("homewizard_cli.client_v2.HOMEWIZARD_CA_CERT", ""),
+            patch("homewizard_cli.client_v2.CA_CERT_PATH", cert_file),
+        ):
+            ctx = _create_ssl_context(verify_cert=True)
+            assert ctx.verify_mode == ssl.CERT_REQUIRED
+
+    def test_verify_with_shipped_bundled_cert_does_not_raise(self):
+        """CRIT-1 regression: the shipped HOMEWIZARD_CA_CERT value must never
+        crash client construction (live default-v2 crash is ssl.SSLError)."""
+        ctx = _create_ssl_context(verify_cert=True)
+        assert ctx.verify_mode == ssl.CERT_REQUIRED
+
 
 class TestP1ClientV2Init:
     def test_init_sets_identifier(self, valid_cert):

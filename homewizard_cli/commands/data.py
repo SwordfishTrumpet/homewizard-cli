@@ -9,13 +9,13 @@ from rich.table import Table
 from ..alerting import AlertDispatcher
 from ..client_factory import API_VERSIONS, resolve_client
 from ..config import resolve_host
-from ..expr import evaluate_until
+from ..expr import evaluate_until, is_valid_expression
 from ..format import Format, get_format, write_data
 from ..jsonpath import query_jsonpath
 from ..models import Measurement
 from ..state import Aggregator, DeltaTracker
 from ..storage import _setup_store
-from ..util import _dumps_json
+from ..util import _print_json
 from ..ws_client import WebSocketClient
 
 
@@ -121,8 +121,9 @@ def _handle_agg_output(
     d: Measurement,
     aggregator: Aggregator | None,
     console: Console,
+    output_format: Format = Format.JSON,
 ) -> bool:
-    """Update aggregator and print merged raw+agg JSON if >=2 samples.
+    """Update aggregator and print merged raw+agg output if >=2 samples.
     Returns True if output was handled (caller should skip normal print).
     """
     if aggregator is None:
@@ -130,7 +131,17 @@ def _handle_agg_output(
     agg_dict = aggregator.update(d.model_dump())
     if agg_dict:
         merged = {**d.model_dump(), **agg_dict}
-        console.print(_dumps_json(merged, indent=True))
+        if output_format == Format.TABLE:
+            from rich.table import Table
+
+            t = Table(show_header=True, header_style="bold magenta")
+            t.add_column("Field", style="cyan")
+            t.add_column("Value", style="green")
+            for k, v in merged.items():
+                t.add_row(k, str(v))
+            console.print(t)
+        else:
+            _print_json(console, merged, indent=True)
         return True
     return False
 
@@ -152,7 +163,7 @@ def _handle_data_output(
     """
     if query:
         result = query_jsonpath(d.model_dump(), query)
-        console.print(_dumps_json(result, indent=True))
+        _print_json(console, result, indent=True)
         return True
 
     if delta and tracker is not None:
@@ -180,7 +191,7 @@ def _handle_data_output(
                 t.add_row(k, str(v))
             console.print(t)
         else:
-            console.print(_dumps_json(filtered, indent=True))
+            _print_json(console, filtered, indent=True)
         return True
 
     if template:
@@ -221,6 +232,13 @@ async def _data_async(
         console.print("Error: --ws requires API v2 (default)", style="red")
         raise typer.Exit(code=1)
 
+    if ws and db:
+        console.print(
+            "Note: --db is not supported with --ws (WebSocket pushes are not "
+            "written to the historical store); the flag is ignored.",
+            style="yellow",
+        )
+
     if not ws and watch is not None and watch < 1.0:
         console.print(
             f"Warning: Polling interval {watch}s is below recommended minimum (1.0s).\n"
@@ -228,6 +246,21 @@ async def _data_async(
             style="yellow",
         )
     output_format = get_format(format, console.is_terminal)
+    if until and not is_valid_expression(until):
+        console.print(
+            f"Invalid --until expression: {until}\n"
+            "         Expected e.g. 'active_power_w > 500 AND total_gas_m3 < 10'.",
+            style="red",
+        )
+        raise typer.Exit(code=5)
+
+    if delta and watch is None:
+        console.print(
+            "Note: --delta compares consecutive readings; a single poll has "
+            "no baseline. Use --watch <interval> to enable delta tracking.",
+            style="yellow",
+        )
+        delta = False
 
     webhook_urls = [alert_webhook] if alert_webhook else None
     alert_commands = [alert_cmd] if alert_cmd else None
@@ -278,7 +311,7 @@ async def _data_async(
                     )
                     continue
 
-                if _handle_agg_output(d, aggregator, console):
+                if _handle_agg_output(d, aggregator, console, output_format=output_format):
                     if watch is None:
                         break
                     continue
@@ -336,7 +369,7 @@ async def _data_async(
                     await asyncio.sleep(watch)
                     continue
 
-                if _handle_agg_output(d, aggregator, console):
+                if _handle_agg_output(d, aggregator, console, output_format=output_format):
                     if watch is None:
                         return
                     await asyncio.sleep(watch)

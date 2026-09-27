@@ -911,3 +911,70 @@ def test_export_watch_fields(tmp_path: Path):
     assert file_path.exists()
     content = file_path.read_text()
     assert "active_power_w" in content
+
+
+# ── HIGH-3 regression: MQTT must publish even with --fields / --delta ───────
+
+
+def test_export_mqtt_publishes_with_fields():
+    """export --format mqtt --fields must publish the filtered payload."""
+    client = _make_client_mock()
+
+    with (
+        patch("homewizard_cli.commands.export.resolve_client", return_value=client),
+        patch("homewizard_cli.format.mqtt.PersistentMqttClient") as mock_mqtt_cls,
+    ):
+        mqtt_instance = AsyncMock()
+        mqtt_instance.publish = AsyncMock(return_value=True)
+        mqtt_instance.close = AsyncMock()
+        mock_mqtt_cls.return_value = mqtt_instance
+
+        result = runner.invoke(
+            app,
+            [
+                "export",
+                "--format",
+                "mqtt",
+                "--broker",
+                "mqtt://broker.local",
+                "--topic",
+                "home/p1meter",
+                "--fields",
+                "active_power_w",
+            ],
+        )
+    assert result.exit_code == 0, result.output
+    mqtt_instance.publish.assert_called_once()
+    published = mqtt_instance.publish.call_args.args[0]
+    assert isinstance(published, dict)
+    assert set(published.keys()) == {"active_power_w"}
+
+
+def test_export_mqtt_publishes_with_delta():
+    """export --format mqtt --delta must still publish."""
+    client = _make_client_mock()
+
+    with (
+        patch("homewizard_cli.commands.export.resolve_client", return_value=client),
+        patch("homewizard_cli.format.mqtt.PersistentMqttClient") as mock_mqtt_cls,
+    ):
+        mqtt_instance = AsyncMock()
+        mqtt_instance.publish = AsyncMock(return_value=True)
+        mqtt_instance.close = AsyncMock()
+        mock_mqtt_cls.return_value = mqtt_instance
+
+        result = runner.invoke(
+            app,
+            [
+                "export",
+                "--format",
+                "mqtt",
+                "--broker",
+                "mqtt://broker.local",
+                "--topic",
+                "home/p1meter",
+                "--delta",
+            ],
+        )
+    assert result.exit_code == 0, result.output
+    mqtt_instance.publish.assert_called_once()

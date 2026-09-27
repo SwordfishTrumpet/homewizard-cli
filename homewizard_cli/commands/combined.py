@@ -3,7 +3,7 @@
 import asyncio
 from typing import Any
 
-from ..util import _dumps_json, _loads_json
+from ..util import _loads_json, _print_json
 
 import typer
 from rich.console import Console
@@ -69,34 +69,38 @@ async def _combined_async(
 
     async with client as c:
         store, serial = await _setup_store(db, api_version, c)
-        coros = []
-        if api_version == "v2":
-            coros.append(c.get_json_v2("/api", DeviceInfoV2))
-            coros.append(c.get_json_v2("/api/measurement", Measurement))
-            coros.append(c.get_json_v2("/api/system", SystemV2))
-            coros.append(c.get("/api/state"))
-            coros.append(c.get_json_v2("/api/batteries", BatteryState))
-        else:
-            coros.append(c.get("/api/"))
-            coros.append(c.get_json("/api/v1/data", Measurement))
-            coros.append(c.get_json("/api/v1/system", SystemResponse))
-            coros.append(asyncio.sleep(0))
-            coros.append(asyncio.sleep(0))
-
-        results = await asyncio.gather(*coros, return_exceptions=True)
-        if store and serial and not isinstance(results[1], Exception):
-            measurement = results[1]
-            if hasattr(measurement, "model_dump"):
-                store.append(measurement.model_dump(), serial)
-        keys = ["device", "measurement", "system", "state", "batteries"]
-        out: dict[str, Any] = {}
-        for k, v in zip(keys, results, strict=False):
-            if isinstance(v, Exception):
-                out[k] = None
-            elif isinstance(v, str):
-                out[k] = _loads_json(v)
-            elif hasattr(v, "model_dump"):
-                out[k] = v.model_dump(mode="json")
+        try:
+            coros = []
+            if api_version == "v2":
+                coros.append(c.get_json_v2("/api", DeviceInfoV2))
+                coros.append(c.get_json_v2("/api/measurement", Measurement))
+                coros.append(c.get_json_v2("/api/system", SystemV2))
+                coros.append(c.get("/api/state"))
+                coros.append(c.get_json_v2("/api/batteries", BatteryState))
             else:
-                out[k] = v
-        console.print(_dumps_json(out, indent=True))
+                coros.append(c.get("/api/"))
+                coros.append(c.get_json("/api/v1/data", Measurement))
+                coros.append(c.get_json("/api/v1/system", SystemResponse))
+                coros.append(asyncio.sleep(0))
+                coros.append(asyncio.sleep(0))
+
+            results = await asyncio.gather(*coros, return_exceptions=True)
+            if store and serial and not isinstance(results[1], Exception):
+                measurement = results[1]
+                if hasattr(measurement, "model_dump"):
+                    store.append(measurement.model_dump(), serial)
+            keys = ["device", "measurement", "system", "state", "batteries"]
+            out: dict[str, Any] = {}
+            for k, v in zip(keys, results, strict=False):
+                if isinstance(v, Exception):
+                    out[k] = None
+                elif isinstance(v, str):
+                    out[k] = _loads_json(v)
+                elif hasattr(v, "model_dump"):
+                    out[k] = v.model_dump(mode="json")
+                else:
+                    out[k] = v
+            _print_json(console, out, indent=True)
+        finally:
+            if store:
+                store.close()

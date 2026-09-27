@@ -5,7 +5,9 @@ from io import StringIO
 from typing import Any
 from unittest.mock import MagicMock
 
+import pytest
 from rich.console import Console
+from typer.testing import CliRunner
 
 from homewizard_cli.format import Format, write_data
 from homewizard_cli.format.csv import write_csv
@@ -124,10 +126,11 @@ def test_influx_3phase():
 
 
 def test_influx_meter_model_spaces_replaced():
+    """Spaces in tag values must be escaped, not replaced (LOW-9)."""
     c, _buf = _console()
     write_influx(basic_data(meter_model="ISKRA 2M550E-1011"), c)
     out = _buf.getvalue()
-    assert "meter_model=ISKRA_2M550E-1011" in out
+    assert "meter_model=ISKRA\\ 2M550E-1011" in out
 
 
 def test_influx_optional_fields_omitted():
@@ -142,10 +145,9 @@ def test_influx_timestamp_nanoseconds():
     c, _buf = _console()
     write_influx(basic_data(), c)
     out = _buf.getvalue()
-    # timestamp is last field: should be a large integer (nanoseconds)
-    parts = out.strip().split()
-    assert len(parts) == 3
-    ts = int(parts[2])
+    # timestamp is last field: should be a large integer (nanoseconds).
+    # Split on the LAST space only (escaped tag spaces use backslash-space).
+    ts = int(out.strip().rsplit(" ", 1)[1])
     assert ts > 1_700_000_000_000_000_000  # reasonable epoch ns
 
 
@@ -752,3 +754,78 @@ def test_mqtt_publish_success_with_empty_buffer():
         assert result is True
         assert client.pending == 0
         mock_client.publish.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# HIGH-2 regression: --format mqtt outside export must fail cleanly
+# ---------------------------------------------------------------------------
+
+
+def test_data_format_mqtt_clear_error():
+    """data --format mqtt must fail with a typed error, not a TypeError."""
+    from unittest.mock import AsyncMock, patch
+
+    from homewizard_cli.errors import WriteError
+    from homewizard_cli.main import app
+    from homewizard_cli.models import Measurement
+
+    client = AsyncMock()
+    client.__aenter__ = AsyncMock(return_value=client)
+    client.__aexit__ = AsyncMock(return_value=None)
+    client.get_json_v2 = AsyncMock(return_value=Measurement(active_power_w=500.0))
+
+    runner = CliRunner()
+    with patch("homewizard_cli.commands.data.resolve_client", return_value=client):
+        result = runner.invoke(app, ["data", "--format", "mqtt"])
+    assert isinstance(result.exception, WriteError)
+    assert result.exception.code == 7
+    assert "export" in str(result.exception)
+    assert "Traceback" not in result.output
+
+
+def test_write_data_mqtt_raises_typed_error():
+    """write_data with Format.MQTT must raise WriteError (not TypeError)."""
+    from io import StringIO
+
+    from rich.console import Console
+
+    from homewizard_cli.errors import P1Error
+    from homewizard_cli.format import Format, write_data
+    from homewizard_cli.models import Measurement
+
+    with pytest.raises(P1Error) as exc_info:
+        write_data(
+            Measurement(active_power_w=1.0),
+            Format.MQTT,
+            Console(file=StringIO()),
+        )
+    assert "export" in str(exc_info.value)
+
+
+# ── LOW-9: Influx line protocol escaping ─────────────────────────
+
+
+def test_influx_escapes_tag_values():
+    from homewizard_cli.format.influx import write_influx
+
+    data = basic_data(unique_id="a,b c=d", meter_model="TEST MODEL X")
+    buf = StringIO()
+    write_influx(data, Console(file=buf, force_terminal=False))
+    line = buf.getvalue().strip()
+    assert "serial=a\\,b\\ c\\=d" in line
+    assert "meter_model=TEST\\ MODEL\\ X" in line
+    # no raw spaces/commas/equals in the tag section (before the first field)
+    tags = line.split(" ", 1)[0]
+    assert "serial=a,b" not in tags
+
+
+def test_influx_skips_empty_tags():
+    from homewizard_cli.format.influx import write_influx
+
+    data = basic_data(unique_id="", meter_model="")
+    buf = StringIO()
+    write_influx(data, Console(file=buf, force_terminal=False))
+    line = buf.getvalue().strip()
+    assert "serial=" not in line.split(" ", 1)[0]
+    assert "meter_model=" not in line.split(" ", 1)[0]
+    assert line.startswith("p1_meter,device=HWE-P1 ")

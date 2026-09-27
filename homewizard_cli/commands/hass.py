@@ -4,7 +4,7 @@ import asyncio
 
 import typer
 
-from ..util import _dumps_json, _loads_json
+from ..util import _loads_json, _print_json
 from rich.console import Console
 
 from ..client_factory import API_VERSIONS, resolve_client
@@ -41,10 +41,40 @@ _SENSOR_FIELD = {
     "Energy Import": "total_power_import_kwh",
     "Energy Export": "total_power_export_kwh",
     "Gas": "total_gas_m3",
-    "Water": "total_water_m3",
     "Voltage L1": "active_voltage_l1_v",
     "Current L1": "active_current_l1_a",
 }
+
+# Sub-meters (gas/water) live in the ``external`` array on API v2 (and are
+# mirrored there on v1). ``total_gas_m3`` exists as a flat field only on v1;
+# water has NO flat field at all (MED-4).
+_EXTERNAL_TYPE = {
+    "Gas": "gas_meter",
+    "Water": "water_meter",
+}
+
+
+def _value_template(name: str) -> str:
+    """Build the Home Assistant value_template for a sensor.
+
+    Flat fields cover power/energy/voltage/current. Gas prefers the flat v1
+    field and falls back to the ``external`` sub-meter (v2); Water is read
+    exclusively from ``external``.
+    """
+    field = _SENSOR_FIELD.get(name)
+    external_type = _EXTERNAL_TYPE.get(name)
+    if field is not None and external_type is not None:
+        return (
+            f"{{{{ value_json.{field} if value_json.{field} is not none else "
+            f"(value_json.external | selectattr('type', 'equalto', '{external_type}') "
+            f"| map(attribute='value') | list | first | default(0)) }}}}"
+        )
+    if external_type is not None:
+        return (
+            f"{{{{ value_json.external | selectattr('type', 'equalto', '{external_type}') "
+            f"| map(attribute='value') | list | first | default(0) }}}}"
+        )
+    return f"{{{{ value_json.{field} }}}}"
 
 
 @app.callback(invoke_without_command=True)
@@ -124,11 +154,11 @@ async def _hass_async(
 
     if use_mqtt:
         for name, device_class, state_class, unit, icon in _MQTT_SENSORS:
-            field = _SENSOR_FIELD[name]
+            field = _SENSOR_FIELD.get(name) or name.lower().replace(" ", "_")
             payload = {
                 "name": f"{device_cfg['name']} {name}",
                 "state_topic": f"{topic_prefix}/{serial}/state",
-                "value_template": f"{{{{ value_json.{field} }}}}",
+                "value_template": _value_template(name),
                 "unit_of_measurement": unit,
                 "device_class": device_class,
                 "state_class": state_class,
@@ -137,13 +167,13 @@ async def _hass_async(
                 "device": device_cfg,
             }
             topic = f"homeassistant/sensor/{serial}/{field}/config"
-            console.print(_dumps_json({"topic": topic, "payload": payload}, indent=True))
+            _print_json(console, {"topic": topic, "payload": payload}, indent=True)
     else:
         sensors = []
         _protocol = "https" if api_version == "v2" else "http"
         _endpoint = "/api/measurement" if api_version == "v2" else "/api/v1/data"
         for name, device_class, state_class, unit, icon in _MQTT_SENSORS:
-            field = _SENSOR_FIELD[name]
+            field = _SENSOR_FIELD.get(name) or name.lower().replace(" ", "_")
             sensors.append(
                 {
                     "platform": "rest",
@@ -152,9 +182,9 @@ async def _hass_async(
                     "state_class": state_class,
                     "unit_of_measurement": unit,
                     "icon": icon,
-                    "value_template": f"{{{{ value_json.{field} }}}}",
+                    "value_template": _value_template(name),
                     "resource": f"{_protocol}://{host}{_endpoint}",
                     "device": device_cfg,
                 }
             )
-        console.print(_dumps_json({"sensor": sensors}, indent=True))
+        _print_json(console, {"sensor": sensors}, indent=True)

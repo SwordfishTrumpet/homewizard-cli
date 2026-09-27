@@ -12,6 +12,23 @@ try:
 except ImportError:
     _HAS_ORJSON = False
 
+from rich.console import Console
+
+
+def _print_json(console: Console, data: Any, indent: bool = False) -> None:
+    """Print JSON without Rich line-wrapping.
+
+    Rich's Console.print wraps lines at the console width (default 80) by
+    default; a long JSON value (e.g. the multi-entry DSMR power-failure log)
+    would get a raw newline inserted mid-string, producing INVALID JSON.
+    soft_wrap keeps every JSON line intact. ``data`` may be a dict or an
+    already-serialized JSON string.
+    """
+    if isinstance(data, str):
+        console.print(data, soft_wrap=True)
+    else:
+        console.print(_dumps_json(data, indent=indent), soft_wrap=True)
+
 
 def _dumps_json(data: Any, indent: bool = False, default: Callable | None = str) -> str:
     """Fast JSON serialization using orjson with stdlib fallback."""

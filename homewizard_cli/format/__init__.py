@@ -5,12 +5,12 @@ from enum import StrEnum
 
 from rich.console import Console
 
+from ..errors import WriteError
 from .csv import write_csv
 from .env import write_env
 from .influx import write_influx
 from .json import write_json
 from .minimal import write_minimal
-from .mqtt import write_mqtt
 from .prometheus import write_prometheus
 from .raw import write_raw
 from .table import write_table
@@ -44,7 +44,6 @@ FORMAT_WRITERS: dict[Format, Callable] = {
     Format.ENV: write_env,
     Format.MINIMAL: write_minimal,
     Format.RAW: write_raw,
-    Format.MQTT: write_mqtt,
 }
 
 
@@ -55,6 +54,11 @@ def get_format(format_str: str, is_tty: bool = False) -> Format:
 
 
 def write_data(data, format: Format, console: Console):
+    if format == Format.MQTT:
+        raise WriteError(
+            "MQTT format is only available with the export command "
+            "(use: homewizard-cli export --format mqtt --broker ... --topic ...)"
+        )
     if format == Format.AUTO:
         format = get_format("auto", console.is_terminal)
     writer = FORMAT_WRITERS.get(format, write_json)

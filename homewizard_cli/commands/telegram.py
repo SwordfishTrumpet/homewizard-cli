@@ -1,9 +1,10 @@
 """homewizard-cli telegram command."""
 
 import asyncio
+import re
 import time
 
-from ..util import _dumps_json
+from ..util import _print_json
 from collections import deque
 
 import typer
@@ -147,10 +148,10 @@ async def _telegram_async(
                     parsed["obis"] = {
                         lookup_obis(k) or k: v for k, v in parsed["obis"].items()
                     }
-                output = _dumps_json(parsed, indent=True)
+                output_obj = dict(parsed)
                 if rate:
-                    output += f"\nRate: {rate_per_min:.1f} telegrams/minute"
-                console.print(output)
+                    output_obj["rate_per_minute"] = round(rate_per_min, 1)
+                _print_json(console, output_obj, indent=True)
             elif rate:
                 console.print(f"Rate: {rate_per_min:.1f} telegrams/minute")
             else:
@@ -159,6 +160,11 @@ async def _telegram_async(
             if watch is None:
                 break
             await asyncio.sleep(watch)
+
+
+def _is_obis_code_line(line: str) -> bool:
+    """True when a line starts a new OBIS code entry (e.g. ``1-0:1.8.1(``)."""
+    return bool(re.match(r"^\d+-\d+:\d+\.\d+\.\d+\(", line))
 
 
 def _parse_telegram(raw: str) -> dict:
@@ -183,16 +189,29 @@ def _parse_telegram(raw: str) -> dict:
         else:
             obis_lines.append(stripped)
 
-    for line in obis_lines:
-        if "(" in line:
+    i = 0
+    while i < len(obis_lines):
+        line = obis_lines[i]
+        if _is_obis_code_line(line):
             code, rest = line.split("(", 1)
-            value = rest.rstrip(")")
+            value = rest
+            # DSMR multi-line values (e.g. 1-0:99.97.0 power-failure log)
+            # span physical lines until the next OBIS code line.
+            j = i + 1
+            while j < len(obis_lines) and not _is_obis_code_line(obis_lines[j]):
+                value += "\n" + obis_lines[j]
+                j += 1
+            value = value.rstrip(")")
             parsed["obis"][code] = value
             if code == "0-0:1.0.0":
                 parsed["timestamp"] = value
+            i = j
+        else:
+            i += 1
 
     if parsed["crc"]:
-        crc_line = raw.strip().rsplit("!", 1)[0]
+        # DSMR spec: CRC covers the telegram up to and INCLUDING '!'
+        crc_line = raw.strip().rsplit("!", 1)[0] + "!"
         computed = _crc16(crc_line.encode("ascii"))
         parsed["valid"] = parsed["crc"].upper() == f"{computed:04X}"
 
@@ -209,7 +228,8 @@ def _validate_and_print(raw: str, console: Console):
     last_line = lines[-1].strip()
     if last_line.startswith("!"):
         received_crc = last_line[1:]
-        crc_line = stripped.rsplit("!", 1)[0]
+        # DSMR spec: CRC covers the telegram up to and INCLUDING '!'
+        crc_line = stripped.rsplit("!", 1)[0] + "!"
         computed = _crc16(crc_line.encode("ascii"))
         computed_hex = f"{computed:04X}"
         valid = received_crc.upper() == computed_hex.upper()

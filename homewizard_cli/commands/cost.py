@@ -10,8 +10,8 @@ from rich.table import Table
 from ..client_factory import resolve_client
 from ..config import load_config, resolve_host
 from ..config import TariffConfig
-from ..util import _dumps_json
 from ..cost import CostCalculator
+from ..util import _print_json
 from ..format import get_format
 from ..storage import MeasurementStore
 
@@ -198,6 +198,6 @@ def _write_cost(result: dict, fmt: str, console: Console, show_tariffs: bool) ->
         )
         console.print(t)
     elif fmt == "json":
-        console.print(_dumps_json(result, indent=True))
+        _print_json(console, result, indent=True)
     else:
         console.print(f"Total cost: {result.get('total_cost', 0):,.2f} {result.get('currency', 'EUR')}")

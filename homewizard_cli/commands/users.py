@@ -1,6 +1,7 @@
 """homewizard-cli users command (API v2 only)."""
 
 import asyncio
+from urllib.parse import quote
 
 import typer
 
@@ -92,7 +93,7 @@ async def _users_delete_async(
         async with P1ClientV2(
             host, timeout, token=token, verify_cert=not no_verify
         ) as c:
-            result = await c.delete(f"/api/user?name={name}")
+            result = await c.delete(f"/api/user?name={quote(name)}")
             console.print(f"Deleted: {_dumps_json(result)}")
     except P1Error as e:
         console.print(str(e), style="red")

@@ -20,11 +20,16 @@ runner = CliRunner()
 
 
 def _make_valid_telegram(lines: list[str]) -> str:
-    """Build a DSMR telegram with a valid CRC."""
+    """Build a DSMR telegram with a valid CRC.
+
+    Per the DSMR spec the CRC is computed over the telegram content
+    up to and INCLUDING the terminating ``!`` (see dsmr_parser reference:
+    ``re.search(r'/\\/.+\\!', telegram, re.DOTALL)``).
+    """
     body = "\n".join(lines)
     if body and not body.endswith("\n"):
         body += "\n"
-    crc = _crc16(body.encode("ascii"))
+    crc = _crc16((body + "!").encode("ascii"))
     return body + f"!{crc:04X}"
 
 
@@ -595,3 +600,80 @@ async def test_telegram_async_watch_obis_not_found():
 
     assert sleep_calls == 1
     assert client.get.call_count == 1
+
+
+# ---------------------------------------------------------------------------
+# CRIT-2 regression: CRC includes the terminating '!' (DSMR spec)
+# ---------------------------------------------------------------------------
+
+
+def test_parse_telegram_crc_includes_bang():
+    """A telegram whose CRC was computed over body+'!' must validate.
+
+    DSMR spec + dsmr_parser reference compute the CRC over the content
+    up to and INCLUDING the terminating '!' character.
+    """
+    body = "/TEST\n1-0:1.8.1(002052.366*kWh)\n0-0:1.0.0(220815164518W)\n"
+    crc = _crc16((body + "!").encode("ascii"))
+    raw = body + f"!{crc:04X}"
+    result = _parse_telegram(raw)
+    assert result["valid"] is True
+
+
+def test_parse_telegram_real_device_format():
+    """Real-device DSMR telegram format (CRLF endings, multi-group OBIS)."""
+    body = (
+        "/ISK5\\2M550E-1011\r\n"
+        "\r\n"
+        "1-3:0.2.8(50)\r\n"
+        "0-0:1.0.0(260806172116S)\r\n"
+        "0-0:96.1.1(4530303333303036373934323039373136)\r\n"
+        "1-0:1.8.1(005321.207*kWh)\r\n"
+        "0-1:24.2.1(260806172100S)(07256.089*m3)\r\n"
+        "\r\n"
+    )
+    crc = _crc16((body + "!").encode("ascii"))
+    raw = body + f"!{crc:04X}\r\n"
+    result = _parse_telegram(raw)
+    assert result["valid"] is True
+    assert result["header"] == "/ISK5\\2M550E-1011"
+    assert "0-1:24.2.1" in result["obis"]
+
+
+def test_validate_and_print_crc_includes_bang():
+    """--validate must accept telegrams whose CRC covers body+'!'."""
+    body = "/TEST\n1-0:1.8.1(002052.366*kWh)\n"
+    crc = _crc16((body + "!").encode("ascii"))
+    raw = body + f"!{crc:04X}"
+    buf = StringIO()
+    console = Console(file=buf, force_terminal=True)
+    _validate_and_print(raw, console)
+    assert "Valid" in buf.getvalue()
+
+
+def test_raw_formatter_crc_includes_bang():
+    """format/raw.py must emit a CRC that round-trips as valid."""
+    from homewizard_cli.format.raw import write_raw
+    from homewizard_cli.models import Measurement
+
+    data = Measurement(
+        meter_model="TEST",
+        smr_version=50,
+        unique_id="abc123",
+        total_power_import_t1_kwh=2052.366,
+        total_power_import_t2_kwh=1898.022,
+        total_power_export_t1_kwh=0.0,
+        total_power_export_t2_kwh=0.0,
+        active_tariff=1,
+        active_power_w=106.0,
+    )
+    buf = StringIO()
+    console = Console(file=buf, force_terminal=False)
+    write_raw(data, console)
+    output = buf.getvalue().strip()
+    body, crc = output.rsplit("!", 1)
+    assert _crc16((body + "!").encode("ascii")) == int(crc, 16)
+    # Round-trip: re-validating the emitted telegram must succeed
+    check_buf = StringIO()
+    _validate_and_print(output, Console(file=check_buf, force_terminal=True))
+    assert "Valid" in check_buf.getvalue()

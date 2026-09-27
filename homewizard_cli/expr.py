@@ -147,3 +147,39 @@ def evaluate_until(data: dict, expression: str) -> bool:
 
     # Single expression
     return _evaluate_simple(data, expression)
+
+
+def _is_valid_simple(expression: str) -> bool:
+    """Parse-only check for a simple comparison (no data needed)."""
+    if not expression or not expression.strip():
+        return False
+    e = expression.strip()
+    if e.startswith("abs("):
+        e = e[4:]
+    return bool(_SIMPLE_PATTERN.match(e))
+
+
+def is_valid_expression(expression: str | None) -> bool:
+    """Validate a composite --until expression without data (LOW-2).
+
+    Returns False for unparsable expressions so watch commands can fail
+    fast instead of running forever with a condition that never fires.
+    """
+    if not expression or not expression.strip():
+        return False
+    expr = expression.strip()
+    while expr.startswith("(") and expr.endswith(")") and len(expr) > 1:
+        inner = expr[1:-1].strip()
+        if inner:
+            expr = inner
+        else:
+            break
+    or_parts = _split_by_operators(expr, ["OR"])
+    if len(or_parts) > 1:
+        return all(is_valid_expression(p) for p in or_parts)
+    and_parts = _split_by_operators(expr, ["AND"])
+    if len(and_parts) > 1:
+        return all(is_valid_expression(p) for p in and_parts)
+    if expr.startswith("NOT") and (len(expr) == 3 or not expr[3].isalnum()):
+        return is_valid_expression(expr[3:].strip())
+    return _is_valid_simple(expr)

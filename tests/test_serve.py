@@ -320,3 +320,41 @@ async def test_serve_async_success_starts_uvicorn():
                 mock_config_cls.assert_called_once()
                 mock_server_cls.assert_called_once_with(mock_config)
                 mock_server.serve.assert_awaited_once()
+
+
+@pytest.mark.anyio
+async def test_create_app_shared_client_with_proxy():
+    """MED-3/PERF-1: one shared httpx client wired with --proxy, reused."""
+    from homewizard_cli.commands.serve import _create_app
+
+    fake_client = AsyncMock()
+    fake_client.get = AsyncMock(return_value=httpx.Response(200, json={"ok": True}))
+
+    with patch(
+        "homewizard_cli.commands.serve.httpx.AsyncClient",
+        return_value=fake_client,
+    ) as mock_cls:
+        fastapi_app = _create_app(
+            client_host="192.168.1.100",
+            client_timeout=3.0,
+            proxy="http://proxy.local:3128",
+            cache_seconds=0,
+            api_version="v1",
+        )
+        # Exactly one shared client, constructed with the --proxy value
+        assert mock_cls.call_count == 1
+        assert mock_cls.call_args.kwargs.get("proxy") == "http://proxy.local:3128"
+        assert fastapi_app.state.shared_client is fake_client
+
+    # Requests run outside the patch so the test's own httpx is untouched;
+    # the app's captured shared client still routes through the fake.
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=fastapi_app),
+        base_url="http://test",
+    ) as client:
+        r1 = await client.get("/api/v1/data")
+        r2 = await client.get("/api/v1/data")
+    assert r1.status_code == 200
+    assert r2.status_code == 200
+    # Both requests flowed through the SAME client instance
+    assert fake_client.get.await_count == 2

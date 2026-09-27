@@ -327,3 +327,117 @@ def test_data_query_boolean_expression():
         result = runner.invoke(app, ["data", "--query", "active_power_w > 100"])
     assert result.exit_code == 0
     assert "true" in result.output.lower()
+
+
+def test_data_delta_oneshot_warns():
+    """LOW-13: --delta without --watch prints guidance instead of nothing."""
+    from unittest.mock import AsyncMock, patch
+
+    from homewizard_cli.models import Measurement
+
+    client = AsyncMock()
+    client.__aenter__ = AsyncMock(return_value=client)
+    client.__aexit__ = AsyncMock(return_value=None)
+    client.get_json_v2 = AsyncMock(
+        return_value=Measurement(
+            active_power_w=500.0,
+            total_power_import_kwh=1000.0,
+            total_power_export_kwh=0.0,
+        )
+    )
+
+    with patch("homewizard_cli.commands.data.resolve_client", return_value=client):
+        result = runner.invoke(app, ["data", "--delta", "--format", "json"])
+    assert result.exit_code == 0
+    assert "baseline" in result.output or "--watch" in result.output
+
+
+def test_data_invalid_until_fails_fast():
+    """LOW-2: an unparsable --until must error immediately, not run forever."""
+    result = runner.invoke(app, ["data", "--until", "garbage expression", "--format", "json"])
+    assert result.exit_code == 5
+    assert "Invalid --until" in result.output
+
+
+def test_data_ws_db_warns():
+    """LOW-8: --db with --ws prints a warning instead of silently ignoring it."""
+    from unittest.mock import AsyncMock, patch
+
+
+    client = AsyncMock()
+    client.__aenter__ = AsyncMock(return_value=client)
+    client.__aexit__ = AsyncMock(return_value=None)
+
+    with (
+        patch("homewizard_cli.commands.data.resolve_client", return_value=client),
+        patch("homewizard_cli.commands.data.WebSocketClient", autospec=True) as mock_ws,
+    ):
+        ws_instance = mock_ws.return_value
+        ws_instance.__aenter__ = AsyncMock(return_value=ws_instance)
+        ws_instance.__aexit__ = AsyncMock(return_value=False)
+        ws_instance.receive_data = AsyncMock(
+            side_effect=[{"active_power_w": 500.0, "total_power_import_kwh": 100.0}]
+        )
+        result = runner.invoke(
+            app, ["data", "--ws", "--db", "x.db", "--format", "json"]
+        )
+    assert result.exit_code == 0
+    assert "--db" in result.output
+    assert "not supported" in result.output
+
+
+@pytest.mark.asyncio
+async def test_data_agg_table_format():
+    """LOW-14: --agg with --format table renders a Rich table, not JSON."""
+    call_count = 0
+
+    async def side_effect(endpoint, model):
+        nonlocal call_count
+        call_count += 1
+        return Measurement(
+            active_power_w=500.0 + call_count * 100,
+            total_power_import_kwh=1000.0,
+            total_power_export_kwh=0.0,
+        )
+
+    client = AsyncMock()
+    client.__aenter__ = AsyncMock(return_value=client)
+    client.__aexit__ = AsyncMock(return_value=False)
+    client.get_json_v2 = AsyncMock(side_effect=side_effect)
+
+    sleep_calls = 0
+
+    async def mock_sleep(val):
+        nonlocal sleep_calls
+        sleep_calls += 1
+        if sleep_calls >= 3:
+            raise RuntimeError("stop")
+
+    with (
+        patch("homewizard_cli.commands.data.resolve_client", return_value=client),
+        patch("homewizard_cli.commands.data.asyncio.sleep", side_effect=mock_sleep),
+        pytest.raises(RuntimeError, match="stop"),
+    ):
+        from homewizard_cli.commands.data import _data_async
+
+        await _data_async(
+            watch=1.0,
+            fields=None,
+            format="table",
+            host="192.168.1.1",
+            request_timeout=3.0,
+            until=None,
+            template=None,
+            query=None,
+            proxy=None,
+            delta=False,
+            api_version="v2",
+            token=None,
+            no_verify=True,
+            ws=False,
+            alert_webhook=None,
+            alert_cmd=None,
+            alert_cooldown=0.0,
+            agg=True,
+            db=None,
+        )

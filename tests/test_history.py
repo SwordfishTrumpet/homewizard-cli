@@ -450,3 +450,70 @@ class TestHistoryQuery:
             assert result.exit_code != 0
         finally:
             os.unlink(db_path)
+
+
+# ── LOW-4: CSV/TSV escaping ──────────────────────────────────────
+
+
+def test_print_csv_escapes_commas_and_quotes():
+    from io import StringIO
+
+    from rich.console import Console
+
+    from homewizard_cli.commands.history import _print_csv
+
+    rows = [
+        {"text_message": 'hello, "world"\nline2', "active_power_w": 100.5},
+        {"text_message": "plain", "active_power_w": 50.0},
+    ]
+    buf = StringIO()
+    _print_csv(rows, Console(file=buf, force_terminal=False))
+    lines = buf.getvalue().splitlines()
+    # The tricky value must be quoted with doubled quotes
+    assert '"hello, ""world""' in lines[1]
+
+
+def test_print_tsv_removes_tabs():
+    from io import StringIO
+
+    from rich.console import Console
+
+    from homewizard_cli.commands.history import _print_tsv
+
+    rows = [{"text_message": "a\tb", "active_power_w": 1.0}]
+    buf = StringIO()
+    _print_tsv(rows, Console(file=buf, force_terminal=False))
+    line = buf.getvalue().splitlines()[1]
+    assert "\t" not in line.replace('"', "")
+    assert "a    b" in line
+
+
+# ── LOW-5: --compare only sums energy/gas/water counters ─────────
+
+
+def test_compute_comparison_skips_noise_fields():
+    from homewizard_cli.commands.history import _compute_comparison
+
+    current = [
+        {
+            "active_power_w": 500.0,
+            "wifi_strength": 80,
+            "smr_version": 50,
+            "active_tariff": 1,
+            "total_power_import_kwh": 1000.0,
+            "total_gas_m3": 9000.0,
+        }
+    ]
+    prior = [
+        {
+            "active_power_w": 400.0,
+            "wifi_strength": 90,
+            "smr_version": 50,
+            "active_tariff": 2,
+            "total_power_import_kwh": 900.0,
+            "total_gas_m3": 8990.0,
+        }
+    ]
+    result = _compute_comparison(current, prior, None)
+    fields = {r["field"] for r in result}
+    assert fields == {"total_power_import_kwh", "total_gas_m3"}

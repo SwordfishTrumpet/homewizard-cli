@@ -88,29 +88,33 @@ async def _water_async(
     )
     async with client as c:
         store, serial = await _setup_store(db, api_version, c)
-        while True:
-            if api_version == "v2":
-                data = await c.get_json_v2("/api/measurement", Measurement)
-            else:
-                data = await c.get_json("/api/v1/data", Measurement)
-            if store and serial:
-                store.append(data.model_dump(), serial)
+        try:
+            while True:
+                if api_version == "v2":
+                    data = await c.get_json_v2("/api/measurement", Measurement)
+                else:
+                    data = await c.get_json("/api/v1/data", Measurement)
+                if store and serial:
+                    store.append(data.model_dump(), serial)
 
-            water = _find_water_device(data)
-            if water is None:
-                console.print("No water meter found.", style="yellow")
-            elif full:
-                console.print(f"Total:     {water['value']:,.2f} m\u00b3")
-                if water["timestamp"]:
-                    ts_fmt = load_config().timestamp_format
-                    console.print(
-                        f"Last read: {format_p1_timestamp(water['timestamp'], ts_fmt)}"
-                    )
-                if water["unique_id"]:
-                    console.print(f"Meter ID:  {water['unique_id']}")
-            else:
-                console.print(f"{water['value']:,.2f} m\u00b3")
+                water = _find_water_device(data)
+                if water is None:
+                    console.print("No water meter found.", style="yellow")
+                elif full:
+                    console.print(f"Total:     {water['value']:,.2f} m\u00b3")
+                    if water["timestamp"]:
+                        ts_fmt = load_config().timestamp_format
+                        console.print(
+                            f"Last read: {format_p1_timestamp(water['timestamp'], ts_fmt)}"
+                        )
+                    if water["unique_id"]:
+                        console.print(f"Meter ID:  {water['unique_id']}")
+                else:
+                    console.print(f"{water['value']:,.2f} m\u00b3")
 
-            if watch is None:
-                break
-            await asyncio.sleep(watch)
+                if watch is None:
+                    break
+                await asyncio.sleep(watch)
+        finally:
+            if store:
+                store.close()
