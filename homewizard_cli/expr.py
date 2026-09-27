@@ -107,16 +107,35 @@ def _split_by_operators(expression: str, operators: list[str]) -> list[str]:
     return parts
 
 
+def _wraps_whole_expression(expression: str) -> bool:
+    """True when the first '(' is balanced by the final character.
+
+    ``(a > 0) AND (b < 0)`` starts with '(' and ends with ')', but the opening
+    paren closes early; stripping it would corrupt the expression. Only strip
+    when a depth scan reaches zero at the final character.
+    """
+    if len(expression) < 2 or expression[0] != "(" or expression[-1] != ")":
+        return False
+    depth = 0
+    last = len(expression) - 1
+    for i, char in enumerate(expression):
+        if char == "(":
+            depth += 1
+        elif char == ")":
+            depth -= 1
+            if depth == 0:
+                return i == last
+    return False
+
+
 def evaluate_until(data: dict, expression: str) -> bool:
     if not expression or not expression.strip():
         return False
 
     expression = expression.strip()
 
-    # Strip outer parentheses that wrap the entire expression
-    while (
-        expression.startswith("(") and expression.endswith(")") and len(expression) > 1
-    ):
+    # Strip outer parentheses only when they wrap the entire expression
+    while _wraps_whole_expression(expression):
         inner = expression[1:-1].strip()
         if inner:
             expression = inner
@@ -168,7 +187,7 @@ def is_valid_expression(expression: str | None) -> bool:
     if not expression or not expression.strip():
         return False
     expr = expression.strip()
-    while expr.startswith("(") and expr.endswith(")") and len(expr) > 1:
+    while _wraps_whole_expression(expr):
         inner = expr[1:-1].strip()
         if inner:
             expr = inner
