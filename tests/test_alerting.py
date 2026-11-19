@@ -278,3 +278,18 @@ class TestExportAlertIntegration:
         assert "--alert-webhook" in result.output
         assert "--alert-cmd" in result.output
         assert "--alert-cooldown" in result.output
+
+
+class TestFailingAlertCommand:
+    """#22: a notifier that exits non-zero must be reported, not hidden."""
+
+    @pytest.mark.asyncio
+    async def test_nonzero_exit_is_logged(self, caplog):
+        import logging
+
+        d = AlertDispatcher(commands=["sh -c 'exit 7'"])
+        with caplog.at_level(logging.WARNING):
+            await d.dispatch("active_power_w > 0", {"active_power_w": 1.0})
+        messages = " ".join(r.getMessage() for r in caplog.records)
+        assert "failed" in messages
+        assert "exited 7" in messages
