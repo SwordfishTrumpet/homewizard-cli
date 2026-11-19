@@ -28,23 +28,23 @@ def write_raw(data: Measurement, console: Console):
     tariff = "0001" if data.active_tariff == 1 else "0002"
     lines.append(f"0-0:96.14.0({tariff})")
     if data.active_power_w >= 0:
-        lines.append(f"1-0:1.7.0({data.active_power_w:06.3f}*kW)")
+        lines.append(f"1-0:1.7.0({data.active_power_w / 1000:06.3f}*kW)")
     else:
-        lines.append(f"1-0:2.7.0({abs(data.active_power_w):06.3f}*kW)")
+        lines.append(f"1-0:2.7.0({abs(data.active_power_w) / 1000:06.3f}*kW)")
     if data.active_power_l1_w is not None:
-        val = abs(data.active_power_l1_w)
+        val = abs(data.active_power_l1_w) / 1000
         if data.active_power_l1_w >= 0:
             lines.append(f"1-0:21.7.0({val:06.3f}*kW)")
         else:
             lines.append(f"1-0:22.7.0({val:06.3f}*kW)")
     if data.active_power_l2_w is not None:
-        val = abs(data.active_power_l2_w)
+        val = abs(data.active_power_l2_w) / 1000
         if data.active_power_l2_w >= 0:
             lines.append(f"1-0:41.7.0({val:06.3f}*kW)")
         else:
             lines.append(f"1-0:42.7.0({val:06.3f}*kW)")
     if data.active_power_l3_w is not None:
-        val = abs(data.active_power_l3_w)
+        val = abs(data.active_power_l3_w) / 1000
         if data.active_power_l3_w >= 0:
             lines.append(f"1-0:61.7.0({val:06.3f}*kW)")
         else:
@@ -84,9 +84,9 @@ def write_raw(data: Measurement, console: Console):
         lines.append(f"0-1:96.1.0({data.gas_unique_id})")
         lines.append(f"0-1:24.2.1(0000000000W)({data.total_gas_m3:06.3f}*m3)")
     if data.active_power_average_w is not None:
-        lines.append(f"1-0:15.7.0({data.active_power_average_w:06.3f}*kW)")
+        lines.append(f"1-0:15.7.0({data.active_power_average_w / 1000:06.3f}*kW)")
     if data.monthly_power_peak_w is not None:
-        lines.append(f"1-0:16.7.0({data.monthly_power_peak_w:06.3f}*kW)")
+        lines.append(f"1-0:16.7.0({data.monthly_power_peak_w / 1000:06.3f}*kW)")
     if data.text_message:
         lines.append(f"0-0:96.13.0({data.text_message})")
     lines.append("!")

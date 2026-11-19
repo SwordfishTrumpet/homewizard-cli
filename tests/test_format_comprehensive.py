@@ -416,6 +416,41 @@ def test_raw_negative_power_uses_export_obis():
     assert "1-0:1.7.0" not in out  # not import
 
 
+def test_raw_power_fields_are_converted_w_to_kw():
+    """#18: power fields are labelled *kW, so watts must be divided by 1000."""
+    c, _buf = _console()
+    write_raw(
+        basic_data(
+            active_power_w=1500.0,
+            active_power_l1_w=500.0,
+            active_power_l2_w=600.0,
+            active_power_l3_w=400.0,
+            active_power_average_w=1480.0,
+            monthly_power_peak_w=3200.0,
+        ),
+        c,
+    )
+    out = _buf.getvalue()
+    assert "1-0:1.7.0(01.500*kW)" in out
+    assert "1-0:21.7.0(00.500*kW)" in out
+    assert "1-0:41.7.0(00.600*kW)" in out
+    assert "1-0:61.7.0(00.400*kW)" in out
+    assert "1-0:15.7.0(01.480*kW)" in out
+    assert "1-0:16.7.0(03.200*kW)" in out
+    # the watt value must never appear as a kW figure
+    assert "1500.000*kW" not in out
+    assert "3200.000*kW" not in out
+
+
+def test_raw_negative_power_is_converted_to_kw():
+    """#18: the export (negative) branches divide by 1000 too."""
+    c, _buf = _console()
+    write_raw(basic_data(active_power_w=-1500.0, active_power_l1_w=-500.0), c)
+    out = _buf.getvalue()
+    assert "1-0:2.7.0(01.500*kW)" in out
+    assert "1-0:22.7.0(00.500*kW)" in out
+
+
 def test_raw_quality_counts():
     c, _buf = _console()
     write_raw(full_3phase_data(), c)

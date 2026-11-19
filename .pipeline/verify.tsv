@@ -1,2 +1,3 @@
 16	uv run python -m pytest tests/test_export_db.py::test_export_retain_days_rejects_non_positive -q	0	data-integrity
 17	uv run python -m pytest tests/test_data_db.py::test_data_db_logs_row_when_device_info_fails -q	0	data-integrity
+18	uv run python -m pytest tests/test_format_comprehensive.py::test_raw_power_fields_are_converted_w_to_kw -q	0	domain
