@@ -12,6 +12,10 @@ from homewizard_cli.main import app
 
 runner = CliRunner()
 
+# The proxy refuses callers without an inbound token (issue #19).
+PROXY_TOKEN = "proxy-test-token"
+AUTH_HEADERS = {"Authorization": f"Bearer {PROXY_TOKEN}"}
+
 
 def test_serve_help():
     result = runner.invoke(app, ["serve", "--help"])
@@ -34,10 +38,12 @@ async def test_create_app_root():
         proxy=None,
         cache_seconds=0,
         api_version="v1",
+        auth_token=PROXY_TOKEN,
     )
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=fastapi_app),
         base_url="http://test",
+        headers=AUTH_HEADERS,
     ) as client:
         response = await client.get("/")
     assert response.status_code == 200
@@ -61,6 +67,7 @@ async def test_create_app_proxy_v2():
         api_version="v2",
         token="secret_token",
         no_verify=True,
+        auth_token=PROXY_TOKEN,
     )
 
     with respx.mock:
@@ -70,6 +77,7 @@ async def test_create_app_proxy_v2():
         async with httpx.AsyncClient(
             transport=httpx.ASGITransport(app=fastapi_app),
             base_url="http://test",
+            headers=AUTH_HEADERS,
         ) as client:
             response = await client.get("/api/measurement")
         assert response.status_code == 200
@@ -91,6 +99,7 @@ async def test_create_app_proxy_v1():
         proxy=None,
         cache_seconds=0,
         api_version="v1",
+        auth_token=PROXY_TOKEN,
     )
 
     with respx.mock:
@@ -100,6 +109,7 @@ async def test_create_app_proxy_v1():
         async with httpx.AsyncClient(
             transport=httpx.ASGITransport(app=fastapi_app),
             base_url="http://test",
+            headers=AUTH_HEADERS,
         ) as client:
             response = await client.get("/api/v1/data")
         assert response.status_code == 200
@@ -120,6 +130,7 @@ async def test_create_app_cache_hit():
         proxy=None,
         cache_seconds=60,
         api_version="v1",
+        auth_token=PROXY_TOKEN,
     )
 
     with respx.mock:
@@ -129,6 +140,7 @@ async def test_create_app_cache_hit():
         async with httpx.AsyncClient(
             transport=httpx.ASGITransport(app=fastapi_app),
             base_url="http://test",
+            headers=AUTH_HEADERS,
         ) as client:
             # First request hits backend
             response = await client.get("/api/v1/data")
@@ -155,6 +167,7 @@ async def test_create_app_cache_miss_expired():
         proxy=None,
         cache_seconds=1,
         api_version="v1",
+        auth_token=PROXY_TOKEN,
     )
 
     with respx.mock:
@@ -164,6 +177,7 @@ async def test_create_app_cache_miss_expired():
         async with httpx.AsyncClient(
             transport=httpx.ASGITransport(app=fastapi_app),
             base_url="http://test",
+            headers=AUTH_HEADERS,
         ) as client:
             # First request
             response = await client.get("/api/v1/data")
@@ -177,6 +191,7 @@ async def test_create_app_cache_miss_expired():
         async with httpx.AsyncClient(
             transport=httpx.ASGITransport(app=fastapi_app),
             base_url="http://test",
+            headers=AUTH_HEADERS,
         ) as client:
             response = await client.get("/api/v1/data")
             assert response.status_code == 200
@@ -193,10 +208,12 @@ async def test_create_app_obis_known():
         proxy=None,
         cache_seconds=0,
         api_version="v1",
+        auth_token=PROXY_TOKEN,
     )
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=fastapi_app),
         base_url="http://test",
+        headers=AUTH_HEADERS,
     ) as client:
         response = await client.get("/obis/1-0:1.8.0")
     assert response.status_code == 200
@@ -216,10 +233,12 @@ async def test_create_app_obis_unknown():
         proxy=None,
         cache_seconds=0,
         api_version="v1",
+        auth_token=PROXY_TOKEN,
     )
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=fastapi_app),
         base_url="http://test",
+        headers=AUTH_HEADERS,
     ) as client:
         response = await client.get("/obis/unknown")
     assert response.status_code == 200
@@ -340,6 +359,7 @@ async def test_create_app_shared_client_with_proxy():
             proxy="http://proxy.local:3128",
             cache_seconds=0,
             api_version="v1",
+            auth_token=PROXY_TOKEN,
         )
         # Exactly one shared client, constructed with the --proxy value
         assert mock_cls.call_count == 1
@@ -351,6 +371,7 @@ async def test_create_app_shared_client_with_proxy():
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=fastapi_app),
         base_url="http://test",
+        headers=AUTH_HEADERS,
     ) as client:
         r1 = await client.get("/api/v1/data")
         r2 = await client.get("/api/v1/data")
@@ -358,3 +379,111 @@ async def test_create_app_shared_client_with_proxy():
     assert r2.status_code == 200
     # Both requests flowed through the SAME client instance
     assert fake_client.get.await_count == 2
+
+
+# ---------------------------------------------------------------------------
+# Inbound authentication (issue #19): the proxy holds the meter's token, so it
+# must not hand readings to a caller that presents nothing.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.anyio
+async def test_proxy_refuses_every_route_without_inbound_token():
+    from homewizard_cli.commands.serve import _create_app
+
+    fastapi_app = _create_app(
+        client_host="192.168.1.100",
+        client_timeout=3.0,
+        proxy=None,
+        cache_seconds=0,
+        api_version="v1",
+        auth_token=PROXY_TOKEN,
+    )
+
+    paths = ["/", "/api/v1/data", "/api/measurement", "/obis/1-0:1.8.0", "/openapi.json"]
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=fastapi_app),
+        base_url="http://test",
+    ) as client:
+        for path in paths:
+            response = await client.get(path)
+            assert response.status_code == 401, path
+            assert response.headers.get("www-authenticate") == "Bearer"
+
+
+@pytest.mark.anyio
+async def test_proxy_refuses_a_wrong_token():
+    from homewizard_cli.commands.serve import _create_app
+
+    fastapi_app = _create_app(
+        client_host="192.168.1.100",
+        client_timeout=3.0,
+        proxy=None,
+        cache_seconds=0,
+        api_version="v1",
+        auth_token=PROXY_TOKEN,
+    )
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=fastapi_app),
+        base_url="http://test",
+        headers={"Authorization": "Bearer not-the-token"},
+    ) as client:
+        response = await client.get("/api/v1/data")
+    assert response.status_code == 401
+
+
+@pytest.mark.anyio
+async def test_app_without_an_inbound_token_refuses_everyone():
+    """No configured credential must never mean "no check"."""
+    from homewizard_cli.commands.serve import _create_app
+
+    fastapi_app = _create_app(
+        client_host="192.168.1.100",
+        client_timeout=3.0,
+        proxy=None,
+        cache_seconds=0,
+        api_version="v2",
+        token="SECRET_DEVICE_TOKEN",
+    )
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=fastapi_app),
+        base_url="http://test",
+    ) as client:
+        response = await client.get("/api/measurement")
+    assert response.status_code == 401
+    assert "SECRET_DEVICE_TOKEN" not in response.text
+
+
+@pytest.mark.anyio
+async def test_serve_async_generates_a_proxy_token():
+    from homewizard_cli.commands import serve as serve_mod
+
+    fake_client = AsyncMock()
+    fake_client.__aenter__ = AsyncMock(return_value=fake_client)
+    fake_client.__aexit__ = AsyncMock(return_value=False)
+    fake_client.get = AsyncMock(return_value={"ok": True})
+
+    mock_server = MagicMock()
+    mock_server.serve = AsyncMock()
+
+    with (
+        patch.object(serve_mod, "_HAS_FASTAPI", True),
+        patch.object(serve_mod, "resolve_client", return_value=fake_client),
+        patch.object(serve_mod, "_create_app", return_value=MagicMock()) as create,
+        patch("uvicorn.Config", return_value=MagicMock()),
+        patch("uvicorn.Server", return_value=mock_server),
+    ):
+        await serve_mod._serve_async(
+            host="192.168.1.100",
+            request_timeout=3.0,
+            proxy=None,
+            bind="127.0.0.1",
+            port=8000,
+            cache_seconds=0,
+        )
+
+    generated = create.call_args.kwargs.get("auth_token")
+    assert generated
+    assert len(generated) >= 16

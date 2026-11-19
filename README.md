@@ -891,35 +891,41 @@ homewizard-cli serve
 ```
 
 ```
+Proxy auth token (generated): 5Vb1...
+  Callers must send: Authorization: Bearer <proxy token>
 P1 Meter at 192.168.1.100: OK
-Starting proxy at http://0.0.0.0:8000
+Starting proxy at http://127.0.0.1:8000
 Proxying to P1 Meter at 192.168.1.100
 ```
 
+The proxy holds the meter's token, so it authenticates its own callers. Every route, including `/` and `/obis/{code}`, needs that token; a request without it gets `401` and the meter is never contacted. The token is generated per run, printed once at startup; pass `--auth-token` to reuse one (for a Home Assistant integration, for example). A proxy built with no token at all refuses every caller rather than running open.
+
 ```bash
-homewizard-cli serve --port 9000 --cache 10
+homewizard-cli serve --port 9000 --cache 10 --auth-token "$PROXY_TOKEN"
 ```
 
 Then query the proxy:
 
 ```bash
-curl http://localhost:8000/api/measurement  # v2
-curl http://localhost:8000/api/v1/data      # v1
+curl -H "Authorization: Bearer $PROXY_TOKEN" http://localhost:8000/api/measurement  # v2
+curl -H "Authorization: Bearer $PROXY_TOKEN" http://localhost:8000/api/v1/data      # v1
 ```
 
 **Features:**
 - Proxies all `/api/*` paths to the P1 meter
+- Requires an inbound Bearer token on every route
 - Optional response caching (in-memory, TTL in seconds)
 - Supports both API v1 (HTTP) and v2 (HTTPS + Bearer auth)
 - Validates device connectivity before starting
 
 **Options:**
 
-| Option    | Description                                           |
-|-----------|-------------------------------------------------------|
-| `--bind`  | Bind address (default: `0.0.0.0`)                     |
-| `--port`  | Listen port (default: `8000`)                         |
-| `--cache` | Cache proxied responses for N seconds (default: 0, disabled) |
+| Option          | Description                                                   |
+|-----------------|---------------------------------------------------------------|
+| `--bind`        | Bind address (default: `127.0.0.1`; `0.0.0.0` exposes it to the LAN) |
+| `--port`        | Listen port (default: `8000`)                                 |
+| `--cache`       | Cache proxied responses for N seconds (default: 0, disabled)  |
+| `--auth-token`  | Token callers must send; generated and printed when omitted   |
 
 ### `reboot`
 
