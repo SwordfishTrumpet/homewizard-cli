@@ -1,5 +1,6 @@
 import asyncio
 import importlib
+import secrets
 from typing import Any
 
 import httpx
@@ -27,10 +28,19 @@ def _create_app(
     api_version: str = "v2",
     token: str | None = None,
     no_verify: bool = False,
+    auth_token: str | None = None,
 ) -> Any:
+    """Build the proxy app.
+
+    ``auth_token`` is the credential a *caller* must present. The proxy holds
+    the meter's token, so without an inbound check it is a confused deputy that
+    hands token-protected readings to anyone who can reach the port (issue #19).
+    With no ``auth_token`` every route answers 401.
+    """
     from contextlib import asynccontextmanager
 
-    from fastapi import FastAPI
+    from fastapi import FastAPI, Request
+    from fastapi.responses import JSONResponse
 
     protocol = "https" if api_version == "v2" else "http"
     headers = {}
@@ -53,6 +63,36 @@ def _create_app(
         await shared_client.aclose()
 
     fastapi_app = FastAPI(title="homewizard-cli Proxy", lifespan=_lifespan)
+
+    def _unauthorized(detail: str) -> JSONResponse:
+        return JSONResponse(
+            status_code=401,
+            content={"detail": detail},
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    @fastapi_app.middleware("http")
+    async def _require_token(request: Request, call_next: Any) -> Any:
+        """Refuse a caller that cannot prove it may read the meter.
+
+        A middleware, not a per-route dependency: it runs before routing, so a
+        route added later (or the auto-generated /docs and /openapi.json) cannot
+        end up unprotected by omission.
+        """
+        if auth_token is None:
+            return _unauthorized(
+                "This proxy has no inbound token, so it refuses every caller: "
+                "start it with --auth-token"
+            )
+        supplied = (request.headers.get("authorization") or "").strip()
+        if supplied.lower().startswith("bearer "):
+            supplied = supplied[7:].strip()
+        if not supplied or not secrets.compare_digest(
+            supplied.encode("utf-8"), auth_token.encode("utf-8")
+        ):
+            return _unauthorized("Send Authorization: Bearer <proxy token>")
+        return await call_next(request)
+
     fastapi_app.state.shared_client = shared_client
     _cache: dict[str, tuple[float, Any]] = {}
 
@@ -96,7 +136,12 @@ def serve(
     host: str | None = typer.Option(None, "--host", "-H", help="P1 meter IP"),
     timeout: float = typer.Option(3.0, "--timeout", "-t", help="HTTP timeout"),
     proxy: str | None = typer.Option(None, "--proxy", help="HTTP proxy URL"),
-    bind: str = typer.Option("0.0.0.0", "--bind", "-b", help="Bind address"),
+    bind: str = typer.Option(
+        "127.0.0.1",
+        "--bind",
+        "-b",
+        help="Bind address (loopback by default; 0.0.0.0 exposes it to the LAN)",
+    ),
     port: int = typer.Option(8000, "--port", "-p", help="Port to listen on"),
     cache_seconds: int = typer.Option(
         0, "--cache", "-c", help="Cache responses for N seconds"
@@ -107,6 +152,11 @@ def serve(
     token: str | None = typer.Option(None, "--token", help="API v2 auth token"),
     no_verify: bool = typer.Option(
         False, "--no-verify", help="Disable SSL cert verification (v2 only)"
+    ),
+    auth_token: str | None = typer.Option(
+        None,
+        "--auth-token",
+        help="Token callers of the proxy must send (generated when omitted)",
     ),
 ):
     """Start a FastAPI proxy server for the P1 meter."""
@@ -121,6 +171,7 @@ def serve(
             api_version=api_version,
             token=token,
             no_verify=no_verify,
+            auth_token=auth_token,
         )
     )
 
@@ -135,6 +186,7 @@ async def _serve_async(
     api_version: str = "v2",
     token: str | None = None,
     no_verify: bool = False,
+    auth_token: str | None = None,
 ):
     console = Console()
     host = resolve_host(host)
@@ -145,6 +197,19 @@ async def _serve_async(
             style="red",
         )
         raise typer.Exit(code=1)
+
+    # The proxy forwards the meter's token, so it must authenticate its own
+    # callers; generate a credential rather than start an open relay (#19).
+    if auth_token is None:
+        auth_token = secrets.token_urlsafe(24)
+        console.print(f"Proxy auth token (generated): {auth_token}", style="yellow")
+        console.print(
+            "  Pass --auth-token to reuse one instead of generating a new token.",
+            style="cyan",
+        )
+    console.print(
+        "  Callers must send: Authorization: Bearer <proxy token>", style="cyan"
+    )
 
     try:
         client = resolve_client(
@@ -172,6 +237,7 @@ async def _serve_async(
         api_version=api_version,
         token=token,
         no_verify=no_verify,
+        auth_token=auth_token,
     )
     console.print(f"Starting proxy at http://{bind}:{port}", style="green")
     console.print(f"Proxying to P1 Meter at {host}", style="cyan")
