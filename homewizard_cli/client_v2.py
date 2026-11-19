@@ -11,7 +11,7 @@ import httpx
 from pydantic import BaseModel
 
 from .cacert import HOMEWIZARD_CA_CERT
-from .client import _get_proxy_url
+from .client import _get_proxy_url, _unreachable, parse_response
 from .errors import HttpError, TimeoutError
 
 log = logging.getLogger(__name__)
@@ -86,16 +86,21 @@ class P1ClientV2:
         self._retries = 3
         self._backoff_base = 1.0
 
+    def _url(self, path: str) -> str:
+        """Absolute URL for *path*, so an error can name what it asked for."""
+        return str(self._client.base_url.join(path))
+
     async def get(self, path: str) -> str:
         """GET request returning raw text."""
-        last_error: Exception = TimeoutError(self.timeout)
+        request = f"GET {self._url(path)}"
+        last_error: Exception = TimeoutError(self.timeout, request)
         for attempt in range(self._retries):
             try:
                 resp = await self._client.get(path)
                 resp.raise_for_status()
                 return resp.text
             except httpx.TimeoutException:
-                last_error = TimeoutError(self.timeout)
+                last_error = TimeoutError(self.timeout, request)
                 if attempt < self._retries - 1:
                     await asyncio.sleep(
                         min(self._backoff_base * (2**attempt), _MAX_BACKOFF)
@@ -113,90 +118,51 @@ class P1ClientV2:
                     )
                     continue
                 raise HttpError(code, str(e.request.url)) from e
+            except httpx.RequestError as e:
+                raise _unreachable(self.host, request, e) from e
         raise last_error
 
     async def get_json_v2(self, path: str, model: Type[T]) -> T:
         text = await self.get(path)
-        return model.model_validate_json(text)
+        return parse_response(text, model, f"GET {self._url(path)}")
 
     async def get_json(self, path: str, model: Type[T]) -> T:
         """Alias for get_json_v2 — same interface as P1Client.get_json."""
         return await self.get_json_v2(path, model)
 
     async def put_json(self, path: str, data: dict) -> dict:
-        last_error: Exception = TimeoutError(self.timeout)
-        for attempt in range(self._retries):
-            try:
-                resp = await self._client.put(path, json=data)
-                resp.raise_for_status()
-                if resp.status_code == 204:
-                    return {}
-                return resp.json()
-            except httpx.TimeoutException:
-                last_error = TimeoutError(self.timeout)
-                if attempt < self._retries - 1:
-                    await asyncio.sleep(
-                        min(self._backoff_base * (2**attempt), _MAX_BACKOFF)
-                    )
-                    continue
-            except httpx.HTTPStatusError as e:
-                if e.response.status_code >= 500 and attempt < self._retries - 1:
-                    await asyncio.sleep(
-                        min(self._backoff_base * (2**attempt), _MAX_BACKOFF)
-                    )
-                    continue
-                raise HttpError(e.response.status_code, str(e.request.url)) from e
-        raise last_error
+        return await self._write("PUT", path, data)
 
     async def post_json(self, path: str, data: dict) -> dict:
-        last_error: Exception = TimeoutError(self.timeout)
-        for attempt in range(self._retries):
-            try:
-                resp = await self._client.post(path, json=data)
-                resp.raise_for_status()
-                if resp.status_code == 204:
-                    return {}
-                return resp.json()
-            except httpx.TimeoutException:
-                last_error = TimeoutError(self.timeout)
-                if attempt < self._retries - 1:
-                    await asyncio.sleep(
-                        min(self._backoff_base * (2**attempt), _MAX_BACKOFF)
-                    )
-                    continue
-            except httpx.HTTPStatusError as e:
-                if e.response.status_code >= 500 and attempt < self._retries - 1:
-                    await asyncio.sleep(
-                        min(self._backoff_base * (2**attempt), _MAX_BACKOFF)
-                    )
-                    continue
-                raise HttpError(e.response.status_code, str(e.request.url)) from e
-        raise last_error
+        return await self._write("POST", path, data)
 
     async def delete(self, path: str) -> dict:
-        last_error: Exception = TimeoutError(self.timeout)
-        for attempt in range(self._retries):
-            try:
+        return await self._write("DELETE", path)
+
+    async def _write(self, method: str, path: str, data: dict | None = None) -> dict:
+        """Send one write request.
+
+        A write is not idempotent: the device may apply it and then lose the
+        reply, so retrying would pair twice or store the state twice.
+        """
+        request = f"{method} {self._url(path)}"
+        try:
+            if method == "PUT":
+                resp = await self._client.put(path, json=data)
+            elif method == "POST":
+                resp = await self._client.post(path, json=data)
+            else:
                 resp = await self._client.delete(path)
-                resp.raise_for_status()
-                if resp.status_code == 204:
-                    return {}
-                return resp.json()
-            except httpx.TimeoutException:
-                last_error = TimeoutError(self.timeout)
-                if attempt < self._retries - 1:
-                    await asyncio.sleep(
-                        min(self._backoff_base * (2**attempt), _MAX_BACKOFF)
-                    )
-                    continue
-            except httpx.HTTPStatusError as e:
-                if e.response.status_code >= 500 and attempt < self._retries - 1:
-                    await asyncio.sleep(
-                        min(self._backoff_base * (2**attempt), _MAX_BACKOFF)
-                    )
-                    continue
-                raise HttpError(e.response.status_code, str(e.request.url)) from e
-        raise last_error
+            resp.raise_for_status()
+            if resp.status_code == 204:
+                return {}
+            return resp.json()
+        except httpx.TimeoutException as e:
+            raise TimeoutError(self.timeout, request) from e
+        except httpx.HTTPStatusError as e:
+            raise HttpError(e.response.status_code, str(e.request.url)) from e
+        except httpx.RequestError as e:
+            raise _unreachable(self.host, request, e) from e
 
     async def pair(self, name: str = "local/cli") -> dict:
         return await self.post_json("/api/user", {"name": name})

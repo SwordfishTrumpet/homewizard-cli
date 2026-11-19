@@ -406,3 +406,43 @@ class TestRetries:
             result = await client.get("/api/measurement")
             assert result == "ok"
             assert len(route.calls) == 3
+
+
+class TestWritesAreNotRetried:
+    """#23: one command must act on the device once, even after a timeout."""
+
+    @pytest.mark.asyncio
+    async def test_put_json_sent_once_after_timeout(self):
+        calls = []
+
+        def handler(request):
+            calls.append(request)
+            raise httpx.ReadTimeout("response lost after commit", request=request)
+
+        client = P1ClientV2("192.168.1.1", verify_cert=False)
+        await client._client.aclose()
+        client._client = httpx.AsyncClient(
+            base_url="https://192.168.1.1", transport=httpx.MockTransport(handler)
+        )
+        client._backoff_base = 0.01
+        with pytest.raises(TimeoutError):
+            await client.put_json("/api/state", {"power_on": True})
+        assert len(calls) == 1
+
+    @pytest.mark.asyncio
+    async def test_pair_sent_once_after_timeout(self):
+        calls = []
+
+        def handler(request):
+            calls.append(request)
+            raise httpx.ReadTimeout("response lost after commit", request=request)
+
+        client = P1ClientV2("192.168.1.1", verify_cert=False)
+        await client._client.aclose()
+        client._client = httpx.AsyncClient(
+            base_url="https://192.168.1.1", transport=httpx.MockTransport(handler)
+        )
+        client._backoff_base = 0.01
+        with pytest.raises(TimeoutError):
+            await client.pair("local/cli")
+        assert len(calls) == 1

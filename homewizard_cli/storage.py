@@ -14,7 +14,13 @@ from .util import _dumps_json, _loads_json
 log = logging.getLogger(__name__)
 
 
-def _sql_type(annotation: type | None) -> str:
+def _sql_type(annotation: Any) -> str:
+    """SQL column type for a pydantic field annotation.
+
+    The annotation is whatever pydantic exposes (a bare type, a PEP 604 union,
+    or a type form under mypy), so it is narrowed here rather than at the call
+    site (issue #47).
+    """
     if annotation is None:
         return "TEXT"
     origin = get_origin(annotation)

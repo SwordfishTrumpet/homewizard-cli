@@ -285,3 +285,23 @@ def test_convert_v2_measurement_with_none_optional_fields():
     assert m.active_frequency_hz is None
     assert m.total_gas_m3 is None
     assert m.gas_timestamp is None
+
+
+def test_unknown_api_version_is_refused():
+    """#30: a typo must be refused, not silently treated as API v1."""
+    import pytest
+
+    from homewizard_cli.errors import InvalidOptionError
+
+    for value in ("V2", "v3", ""):
+        with pytest.raises(InvalidOptionError) as exc_info:
+            resolve_client(value, "192.168.1.1")
+        assert exc_info.value.code == 2
+        assert "v1" in str(exc_info.value) and "v2" in str(exc_info.value)
+
+
+def test_validate_api_version_accepts_supported_values():
+    from homewizard_cli.client_factory import validate_api_version
+
+    assert validate_api_version("v1") == "v1"
+    assert validate_api_version("v2") == "v2"
