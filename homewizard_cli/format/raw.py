@@ -82,7 +82,8 @@ def write_raw(data: Measurement, console: Console):
     if data.total_gas_m3 is not None and data.gas_unique_id:
         lines.append("0-1:24.1.0(003)")
         lines.append(f"0-1:96.1.0({data.gas_unique_id})")
-        lines.append(f"0-1:24.2.1(0000000000W)({data.total_gas_m3:06.3f}*m3)")
+        gas_ts = f"{data.gas_timestamp}" if data.gas_timestamp else "0000000000"
+        lines.append(f"0-1:24.2.1({gas_ts}W)({data.total_gas_m3:06.3f}*m3)")
     if data.active_power_average_w is not None:
         lines.append(f"1-0:15.7.0({data.active_power_average_w / 1000:06.3f}*kW)")
     if data.monthly_power_peak_w is not None:

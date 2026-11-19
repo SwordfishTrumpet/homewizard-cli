@@ -886,3 +886,22 @@ def test_raw_no_wrap_at_width_80():
     write_raw(basic_data(text_message=message), Console(file=buf, force_terminal=False, width=80))
     lines = buf.getvalue().splitlines()
     assert f"0-0:96.13.0({message})" in lines
+
+
+def test_raw_gas_line_keeps_gas_timestamp():
+    """#26: the reconstructed gas line must carry the real gas timestamp."""
+    from homewizard_cli.format.raw import write_raw
+
+    data = basic_data(gas_unique_id="gasprobe", gas_timestamp=250529120000)
+    buf = StringIO()
+    write_raw(data, Console(file=buf, force_terminal=False, width=9999))
+    assert "0-1:24.2.1(250529120000W)(7252.000*m3)" in buf.getvalue()
+
+
+def test_raw_gas_line_placeholder_without_timestamp():
+    from homewizard_cli.format.raw import write_raw
+
+    data = basic_data(gas_timestamp=None)
+    buf = StringIO()
+    write_raw(data, Console(file=buf, force_terminal=False, width=9999))
+    assert "0-1:24.2.1(0000000000W)" in buf.getvalue()
