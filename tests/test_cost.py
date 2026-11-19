@@ -429,3 +429,123 @@ def test_cost_custom_currency():
     assert result.exit_code == 0
     data = json.loads(result.output)
     assert data["currency"] == "USD"
+
+
+# ── #24: only a reading with no tariff counter falls back to the total ──
+
+
+@pytest.mark.parametrize(
+    ("reading", "expected"),
+    [
+        (
+            {
+                "total_power_import_kwh": 100.0,
+                "total_power_import_t3_kwh": 100.0,
+                "active_tariff": 1,
+            },
+            25.0,
+        ),
+        (
+            {
+                "total_power_import_kwh": 100.0,
+                "total_power_import_t4_kwh": 100.0,
+                "active_tariff": 1,
+            },
+            15.0,
+        ),
+        ({"total_power_import_kwh": 100.0, "active_tariff": 2}, 20.0),
+    ],
+)
+def test_calculate_charges_each_reading_once(reading, expected):
+    """#24: T3/T4-only data is not double-charged; a total-only reading uses the
+    active tariff instead of always T1."""
+    calc = CostCalculator(
+        TariffConfig(
+            t1_rate=0.30, t2_rate=0.20, t3_rate=0.25, t4_rate=0.15, export_credit=0.10
+        )
+    )
+    result = calc.calculate(reading)
+    assert result["total_cost"] == pytest.approx(expected)
+
+
+# ── #25: historical cost bills each tariff's own counter ──
+
+
+def test_calculate_history_bills_each_tariff_separately():
+    """#25: 10 kWh on T1 plus 90 kWh on T2 is 21.00, not 100 kWh at T1."""
+    calc = CostCalculator(TariffConfig(t1_rate=0.30, t2_rate=0.20, export_credit=0.10))
+    rows = [
+        {
+            "total_power_import_kwh": 1000.0,
+            "total_power_import_t1_kwh": 1000.0,
+            "total_power_import_t2_kwh": 0.0,
+            "total_power_export_kwh": 0.0,
+            "active_tariff": 1,
+        },
+        {
+            "total_power_import_kwh": 1100.0,
+            "total_power_import_t1_kwh": 1010.0,
+            "total_power_import_t2_kwh": 90.0,
+            "total_power_export_kwh": 0.0,
+            "active_tariff": 1,
+        },
+    ]
+    result = calc.calculate_history(rows)
+    assert result["period_cost"] == pytest.approx(21.0)
+    assert result["t1_import_kwh"] == pytest.approx(10.0)
+    assert result["t2_import_kwh"] == pytest.approx(90.0)
+
+
+def test_cost_today_uses_the_per_tariff_counters():
+    """#25 end to end: the DB path reads T1/T2 counters, not just the total."""
+    import os
+    import tempfile
+
+    from homewizard_cli.storage import MeasurementStore
+
+    with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
+        db_path = f.name
+    store = MeasurementStore(db_path)
+    store.append(
+        {
+            "total_power_import_kwh": 1000.0,
+            "total_power_import_t1_kwh": 1000.0,
+            "total_power_import_t2_kwh": 0.0,
+            "total_power_export_kwh": 0.0,
+            "active_tariff": 1,
+        },
+        "DEV001",
+    )
+    store.append(
+        {
+            "total_power_import_kwh": 1100.0,
+            "total_power_import_t1_kwh": 1010.0,
+            "total_power_import_t2_kwh": 90.0,
+            "total_power_export_kwh": 0.0,
+            "active_tariff": 1,
+        },
+        "DEV001",
+    )
+    store.close()
+
+    try:
+        result = runner.invoke(
+            app,
+            [
+                "cost",
+                "--today",
+                "--db",
+                db_path,
+                "--format",
+                "json",
+                "--t1-rate",
+                "0.30",
+                "--t2-rate",
+                "0.20",
+            ],
+        )
+        assert result.exit_code == 0
+        data = json.loads(result.output)
+        assert data["total_cost"] == pytest.approx(21.0)
+    finally:
+        os.unlink(db_path)
