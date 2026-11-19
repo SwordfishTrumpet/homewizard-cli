@@ -308,6 +308,27 @@ def resolve_host(host: str | None) -> str:
     return resolved
 
 
+def resolve_timeout(timeout: float | None) -> float:
+    """Return the HTTP timeout from CLI arg, config file, or default.
+
+    A subcommand declares ``--timeout`` with no value so a ``[default] timeout``
+    in config.toml reaches it; the option used to default to 3.0, which meant
+    the configured value only ever applied to the bare command (issue #29).
+    """
+    if timeout is not None:
+        return timeout
+    cfg = load_config()
+    return cfg.timeout or DEFAULT_TIMEOUT
+
+
+def resolve_format(fmt: str | None) -> str:
+    """Return the output format from CLI arg, config file, or default."""
+    if fmt is not None:
+        return fmt
+    cfg = load_config()
+    return cfg.format or DEFAULT_FORMAT
+
+
 def resolve_token(token: str | None) -> str | None:
     """Return token from CLI arg or config file."""
     if token is not None:

@@ -15,3 +15,18 @@
 23	uv run python -m pytest tests/test_client.py::test_put_json_is_sent_once_after_timeout tests/test_client_v2.py::TestWritesAreNotRetried -q	0	reliability
 48	uv run python -m pytest tests/test_models.py::test_iso_to_compact_timestamp_rejects_non_timestamps tests/test_property_based.py -q	0	correctness
 19	uv run python -m pytest tests/test_serve.py -q	0	security
+20	uv run python -m pytest tests/test_export_rotation.py -q	0	data-integrity
+24	uv run python -m pytest tests/test_cost.py -q -k "charges_each_reading_once"	0	domain
+25	uv run python -m pytest tests/test_cost.py -q -k "history"	0	domain
+27	uv run python -m pytest tests/test_format_comprehensive.py -q -k "phase_1_power or phase_columns_add_up"	0	domain
+29	uv run python -m pytest tests/test_config.py -q -k "resolve_timeout or resolve_format"	0	deployment
+29	uv run python -m pytest tests/test_client_factory.py -q -k "config_timeout or explicit_timeout"	0	deployment
+31	uv run python -m pytest tests/test_tooling.py::test_dockerfile_installs_the_build_context -q	0	build
+32	uv run python -m pytest tests/test_tooling.py::test_mypy_hook_declares_every_third_party_import -q	0	build
+33	uv run python -m pytest tests/test_serve.py::test_serve_proxy_uses_the_configured_credentials tests/test_data_func.py::test_data_ws_uses_the_configured_credentials -q	0	security
+34	uv run python -m pytest tests/test_hass.py::test_hass_rest_sensors_include_the_bearer_header -q	0	security
+35	uv run python -m pytest tests/test_reboot.py tests/test_users.py tests/test_batteries.py tests/test_state_cmd.py tests/test_system.py tests/test_identify.py -q -k forbidden	0	testing
+37	uv run python -m pytest tests/test_history.py::test_history_csv_emits_parseable_numbers -q	0	correctness
+38	uv run python -m pytest tests/test_history.py::test_history_tsv_keeps_tab_delimiters -q	0	correctness
+39	uv run python -m pytest tests/test_format_comprehensive.py -q -k "offset or fall_back_hour"	0	correctness
+40	uv run python -m pytest tests/test_models.py::test_v2_measurement_timestamp_survives_conversion -q	0	correctness

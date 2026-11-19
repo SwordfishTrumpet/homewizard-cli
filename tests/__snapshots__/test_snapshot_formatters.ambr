@@ -2,6 +2,7 @@
 # name: test_snapshot_env_all_optional_present
   '''
   export P1_ACTIVE_POWER_W=1500.0
+  export P1_ACTIVE_POWER_L1_W=500.0
   export P1_ACTIVE_POWER_L2_W=600.0
   export P1_ACTIVE_POWER_L3_W=400.0
   export P1_ACTIVE_VOLTAGE_L1_V=230.0
@@ -39,6 +40,7 @@
     "meter_model": "ISKRA 3PH",
     "unique_id": "dev123",
     "active_tariff": 2,
+    "timestamp": null,
     "total_power_import_kwh": 10201.0,
     "total_power_import_t1_kwh": 5100.0,
     "total_power_import_t2_kwh": 5101.0,
@@ -90,6 +92,7 @@
     "meter_model": "ISKRA TEST",
     "unique_id": "abc123",
     "active_tariff": 1,
+    "timestamp": null,
     "total_power_import_kwh": 100.0,
     "total_power_import_t1_kwh": 60.0,
     "total_power_import_t2_kwh": 40.0,
@@ -141,6 +144,7 @@
     "meter_model": "ISKRA TEST",
     "unique_id": "abc123",
     "active_tariff": 1,
+    "timestamp": null,
     "total_power_import_kwh": 100.0,
     "total_power_import_t1_kwh": 60.0,
     "total_power_import_t2_kwh": 40.0,
@@ -202,6 +206,10 @@
   # HELP p1_total_power_export_kwh Total exported energy in kWh
   # TYPE p1_total_power_export_kwh counter
   p1_total_power_export_kwh 500.0
+  
+  # HELP p1_active_power_l1_w Phase 1 active power in watts
+  # TYPE p1_active_power_l1_w gauge
+  p1_active_power_l1_w 500.0
   
   # HELP p1_active_power_l2_w Phase 2 active power in watts
   # TYPE p1_active_power_l2_w gauge

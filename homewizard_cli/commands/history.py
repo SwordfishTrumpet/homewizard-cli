@@ -148,10 +148,23 @@ def _compute_comparison(
 
 
 def _format_value(v: object) -> str:
+    """Format a value for the human-readable table (thousands separators, em dash)."""
     if v is None:
         return "\u2014"
     if isinstance(v, float):
         return f"{v:,.3f}"
+    return str(v)
+
+
+def _machine_value(v: object) -> str:
+    """Format a value for CSV/TSV, where a consumer parses the field back.
+
+    Numbers stay numbers (``10201.212``, never ``10,201.212``) and an absent
+    value is an empty field, so ``float()`` and spreadsheets see the row as
+    data instead of display text (#37).
+    """
+    if v is None:
+        return ""
     return str(v)
 
 
@@ -422,8 +435,12 @@ def _print_table(rows: list[dict], console: Console) -> None:
 
 
 def _csv_escape(v: object, tsv: bool = False) -> str:
-    """Escape a value for CSV/TSV output (LOW-4)."""
-    s = _format_value(v)
+    """Escape a value for CSV/TSV output (LOW-4).
+
+    The value itself is serialized by :func:`_machine_value`, so a numeric
+    field stays parseable while quoting keeps embedded delimiters readable.
+    """
+    s = _machine_value(v)
     if tsv:
         s = s.replace("\t", "    ")
     if any(c in s for c in ',"\n\r'):
@@ -435,20 +452,29 @@ def _print_csv(rows: list[dict], console: Console) -> None:
     if not rows:
         return
     headers = list(rows[0].keys())
-    console.print(",".join(_csv_escape(h) for h in headers), soft_wrap=True)
+    _write_record(console, ",".join(_csv_escape(h) for h in headers))
     for row in rows:
-        console.print(",".join(_csv_escape(row[h]) for h in headers), soft_wrap=True)
+        _write_record(console, ",".join(_csv_escape(row[h]) for h in headers))
 
 
 def _print_tsv(rows: list[dict], console: Console) -> None:
     if not rows:
         return
     headers = list(rows[0].keys())
-    console.print("\t".join(_csv_escape(h, tsv=True) for h in headers), soft_wrap=True)
+    _write_record(console, "\t".join(_csv_escape(h, tsv=True) for h in headers))
     for row in rows:
-        console.print(
-            "\t".join(_csv_escape(row[h], tsv=True) for h in headers), soft_wrap=True
-        )
+        _write_record(console, "\t".join(_csv_escape(row[h], tsv=True) for h in headers))
+
+
+def _write_record(console: Console, line: str) -> None:
+    """Write one CSV/TSV record verbatim.
+
+    Rich's ``print`` wraps at the console width and expands tabs to spaces, so
+    a long record gained physical newlines and a tab-separated row arrived as
+    runs of spaces (#38). Writing through the console's file keeps both
+    delimiters and line count exactly as built.
+    """
+    console.file.write(line + "\n")
 
 
 def _format_file_size(bytes_val: int) -> str:

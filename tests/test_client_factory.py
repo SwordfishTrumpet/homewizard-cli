@@ -305,3 +305,26 @@ def test_validate_api_version_accepts_supported_values():
 
     assert validate_api_version("v1") == "v1"
     assert validate_api_version("v2") == "v2"
+
+
+# ── #29: the configured timeout reaches the client ────────────
+
+
+def test_resolve_client_uses_the_config_timeout_when_none_is_passed():
+    toml = '[default]\nhost = "192.168.1.1"\ntimeout = 10.0\n'
+    with (
+        patch("pathlib.Path.exists", return_value=True),
+        patch("pathlib.Path.read_text", return_value=toml),
+    ):
+        client = resolve_client("v1", "192.168.1.1", None)
+    assert client.timeout == 10.0
+
+
+def test_resolve_client_prefers_the_explicit_timeout():
+    toml = '[default]\ntimeout = 10.0\n'
+    with (
+        patch("pathlib.Path.exists", return_value=True),
+        patch("pathlib.Path.read_text", return_value=toml),
+    ):
+        client = resolve_client("v1", "192.168.1.1", 1.5)
+    assert client.timeout == 1.5

@@ -24,6 +24,8 @@ def write_influx(data: DataResponse, console: Console):
         tags_parts.append(f"meter_model={meter_model}")
     tags = ",".join(tags_parts)
     fields = f"active_power_w={data.active_power_w}"
+    if data.active_power_l1_w is not None:
+        fields += f",active_power_l1_w={data.active_power_l1_w}"
     if data.active_power_l2_w is not None:
         fields += f",active_power_l2_w={data.active_power_l2_w}"
     if data.active_power_l3_w is not None:

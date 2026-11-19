@@ -8,7 +8,7 @@ from rich.console import Console
 
 from ..alerting import AlertDispatcher
 from ..client_factory import API_VERSIONS, resolve_client
-from ..config import resolve_host
+from ..config import resolve_format, resolve_host
 from ..expr import evaluate_until, is_valid_expression
 from ..format import get_format, write_data
 from ..models import Measurement
@@ -45,9 +45,13 @@ def power(
         "--agg",
         help="Show rolling aggregates (mean/min/max/stddev) when watching",
     ),
-    format: str = typer.Option("auto", "--format", "-f", help="Output format"),
+    format: str | None = typer.Option(
+        None, "--format", "-f", help="Output format (default: config, else auto)"
+    ),
     host: str | None = typer.Option(None, "--host", "-H", help="P1 meter IP"),
-    timeout: float = typer.Option(3.0, "--timeout", "-t", help="HTTP timeout"),
+    timeout: float | None = typer.Option(
+        None, "--timeout", "-t", help="HTTP timeout (default: config, else 3.0 s)"
+    ),
     until: str | None = typer.Option(
         None, "--until", help="Exit when expression is true"
     ),
@@ -107,10 +111,10 @@ async def _power_async(
     full: bool,
     color: bool,
     sparkline: bool,
-    format_str: str,
+    format_str: str | None,
     until: str | None,
     host: str | None,
-    request_timeout: float,
+    request_timeout: float | None,
     proxy: str | None = None,
     api_version: str = "v2",
     token: str | None = None,
@@ -129,7 +133,8 @@ async def _power_async(
             "         Device may become unresponsive.",
             style="yellow",
         )
-    output_format = get_format(format_str, console.is_terminal)
+    effective_format = resolve_format(format_str)
+    output_format = get_format(effective_format, console.is_terminal)
     if until and not is_valid_expression(until):
         console.print(
             f"Invalid --until expression: {until}\n"
@@ -208,7 +213,7 @@ async def _power_async(
                         console.print(f"Current:  {data.active_current_l1_a} A")
                     if sparkline:
                         console.print(f"Trend:    {_sparkline(list(values))}")
-                elif format_str != "auto" or not console.is_terminal:
+                elif effective_format != "auto" or not console.is_terminal:
                     write_data(data, output_format, console)
                 else:
                     direction = "exporting" if data.active_power_w < 0 else "importing"

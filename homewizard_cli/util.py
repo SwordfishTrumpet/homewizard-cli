@@ -86,6 +86,26 @@ def _iso_to_compact_timestamp(iso_str: str | None) -> int | None:
     )
 
 
+def _meter_timestamp_with_offset(value: str | None) -> str | None:
+    """Return *value* as an ISO instant that carries a UTC offset.
+
+    The meter reports its reading time as local wall-clock time without an
+    offset (``2026-05-29T12:00:00``), which cannot be converted back to an
+    instant. Attach the host's zone when it is missing so a CSV/TSV export
+    always names one instant (issue #39); an unparsable value yields ``None``
+    and the caller falls back to its own clock.
+    """
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(value)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.astimezone()
+    return parsed.isoformat()
+
+
 _CRC16_TABLE = [
     0x0000, 0xC0C1, 0xC181, 0x0140, 0xC301, 0x03C0, 0x0280, 0xC241,
     0xC601, 0x06C0, 0x0780, 0xC741, 0x0500, 0xC5C1, 0xC481, 0x0440,

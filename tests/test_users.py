@@ -1,3 +1,4 @@
+import pytest
 from typer.testing import CliRunner
 
 from homewizard_cli.main import app
@@ -178,3 +179,38 @@ def test_users_error_text_keeps_bracketed_details():
 
     assert result.exit_code != 0
     assert "[default]" in result.output
+
+
+@pytest.mark.parametrize("status", [401, 403])
+def test_users_delete_forbidden_write_is_not_reported_as_success(status):
+    """#35: a 401/403 on the user delete must fail loudly."""
+    from unittest.mock import AsyncMock, patch
+
+    from homewizard_cli.errors import HttpError
+
+    with patch("homewizard_cli.commands.users.P1ClientV2") as mock_cls:
+        instance = AsyncMock()
+        mock_cls.return_value = instance
+        instance.__aenter__ = AsyncMock(return_value=instance)
+        instance.__aexit__ = AsyncMock(return_value=False)
+        instance.delete = AsyncMock(side_effect=HttpError(status, "/api/user"))
+
+        result = runner.invoke(
+            app,
+            [
+                "users",
+                "delete",
+                "--api-version",
+                "v2",
+                "--name",
+                "alice",
+                "--host",
+                "192.168.1.1",
+                "--token",
+                "t",
+            ],
+        )
+
+    assert result.exit_code != 0
+    assert "Deleted" not in result.output
+    instance.delete.assert_called_once()

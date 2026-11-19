@@ -6,6 +6,7 @@ import os
 import tempfile
 from datetime import datetime, timedelta
 
+import pytest
 from typer.testing import CliRunner
 
 from homewizard_cli.main import app
@@ -484,8 +485,11 @@ def test_print_tsv_removes_tabs():
     buf = StringIO()
     _print_tsv(rows, Console(file=buf, force_terminal=False))
     line = buf.getvalue().splitlines()[1]
-    assert "\t" not in line.replace('"', "")
-    assert "a    b" in line
+    # #38: the field delimiter survives, and a tab *inside* a value cannot be
+    # mistaken for one - it is replaced with spaces before the row is joined.
+    text_message, power = line.split("\t")
+    assert text_message == "a    b"
+    assert power == "1.0"
 
 
 # ── LOW-5: --compare only sums energy/gas/water counters ─────────
@@ -547,3 +551,83 @@ def test_print_tsv_no_wrap_at_width_80():
     buf = StringIO()
     _print_tsv(rows, Console(file=buf, force_terminal=False, width=80))
     assert len(buf.getvalue().splitlines()) == 2
+
+
+# ── #37 / #38: machine-readable CSV and TSV ─────────────────────
+
+
+def _seed_machine_row(db_path: str) -> int:
+    """Insert one reading with an unset numeric field, as export/data --db does."""
+    from datetime import datetime
+
+    from homewizard_cli.storage import MeasurementStore
+
+    store = MeasurementStore(db_path)
+    store.append(
+        {
+            "active_power_w": 1234.5,
+            "active_power_l1_w": None,
+            "total_power_import_kwh": 10201.212,
+            "total_power_export_kwh": 6554.178,
+            "text_message": None,
+            "stored_at": datetime.now().isoformat(),
+        },
+        "SERIAL1",
+    )
+    columns = len([c for c in store._get_columns() if c != "schema_version"])
+    store.close()
+    return columns
+
+
+def test_history_csv_emits_parseable_numbers():
+    """#37: no thousands separators and no em dash in the CSV export."""
+    import csv
+    import io
+    import os
+    import tempfile
+
+    with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
+        db_path = f.name
+    try:
+        _seed_machine_row(db_path)
+        result = runner.invoke(
+            app, ["history", "--db", db_path, "--today", "--format", "csv"]
+        )
+        assert result.exit_code == 0
+        rows = list(csv.reader(io.StringIO(result.output)))
+        data = dict(zip(rows[0], rows[1]))
+        for field in (
+            "active_power_w",
+            "total_power_import_kwh",
+            "total_power_export_kwh",
+        ):
+            assert float(data[field]) == pytest.approx(
+                {
+                    "active_power_w": 1234.5,
+                    "total_power_import_kwh": 10201.212,
+                    "total_power_export_kwh": 6554.178,
+                }[field]
+            )
+        assert data["active_power_l1_w"] == ""
+    finally:
+        os.unlink(db_path)
+
+
+def test_history_tsv_keeps_tab_delimiters():
+    """#38: Rich expanded the tabs, so every TSV row arrived as one column."""
+    import os
+    import tempfile
+
+    with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
+        db_path = f.name
+    try:
+        expected_columns = _seed_machine_row(db_path)
+        result = runner.invoke(
+            app, ["history", "--db", db_path, "--today", "--format", "tsv"]
+        )
+        assert result.exit_code == 0
+        lines = result.output.splitlines()
+        assert len(lines[0].split("\t")) == expected_columns
+        assert len(lines[1].split("\t")) == expected_columns
+    finally:
+        os.unlink(db_path)

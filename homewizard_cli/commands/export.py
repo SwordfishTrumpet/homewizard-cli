@@ -122,7 +122,9 @@ def export(
         None, "--rotate", help="File rotation strategy (daily, hourly)"
     ),
     host: str | None = typer.Option(None, "--host", "-H", help="P1 meter IP"),
-    timeout: float = typer.Option(3.0, "--timeout", "-t", help="HTTP timeout"),
+    timeout: float | None = typer.Option(
+        None, "--timeout", "-t", help="HTTP timeout (default: config, else 3.0 s)"
+    ),
     proxy: str | None = typer.Option(None, "--proxy", help="HTTP proxy URL"),
     broker: str | None = typer.Option(None, "--broker", help="MQTT broker URL"),
     topic: str | None = typer.Option(None, "--topic", help="MQTT topic"),
@@ -230,7 +232,7 @@ async def _export_async(
     watch: float | None,
     file: str | None,
     host: str | None,
-    request_timeout: float,
+    request_timeout: float | None,
     proxy: str | None = None,
     rotate: str | None = None,
     broker: str | None = None,
@@ -351,24 +353,54 @@ async def _export_async(
         else:
             return
 
-        if last_rotation_key is not None and current_key != last_rotation_key:
-            rotated = file_path.with_name(f"{file_path.name}.{last_rotation_key}")
+        if last_rotation_key is None:
+            last_rotation_key = current_key
+            return
+        if current_key == last_rotation_key:
+            return
+
+        rotated = file_path.with_name(f"{file_path.name}.{last_rotation_key}")
+        # Two attempts: a rename that fails once is usually transient, and the
+        # handle still owns the current path so nothing is lost by retrying.
+        for _attempt in (1, 2):
             try:
                 file_handle.flush()
                 os.fsync(file_handle.fileno())
                 file_path.rename(rotated)
-                file_handle = file_stack.enter_context(file_path.open("a"))
-                console.print(f"  Rotated to {rotated.name}", style="green")
             except OSError as e:
                 console.print(f"  Rotation error: {e}", style="red")
+                continue
+            try:
+                new_handle = file_path.open("a")
+            except OSError as reopen_err:
+                console.print(
+                    f"Failed to reopen {file_path} after rotation: {reopen_err}",
+                    style="red",
+                )
+                # Put the archive back under the current name: the handle still
+                # points at that inode, so later records keep landing in a file
+                # named for the current period instead of a rotated one (#20).
                 try:
-                    file_handle = file_stack.enter_context(file_path.open("a"))
-                except OSError as reopen_err:
+                    rotated.rename(file_path)
+                except OSError as rollback_err:
                     console.print(
-                        f"Failed to reopen {file_path} after rotation: {reopen_err}",
+                        f"Could not restore {file_path}: {rollback_err}",
                         style="red",
                     )
-        last_rotation_key = current_key
+                    console.print(
+                        "Refusing to write: the open file is a rotated period",
+                        style="red",
+                    )
+                    file_handle = None
+                    return
+                continue
+            file_handle = file_stack.enter_context(new_handle)
+            last_rotation_key = current_key
+            console.print(f"  Rotated to {rotated.name}", style="green")
+            return
+        # Both attempts failed. last_rotation_key stays on the old period, so
+        # the rotation is retried on the next write rather than being treated
+        # as done while every later record is misfiled.
 
     def _safe_write(buf: str) -> bool:
         if file_handle is None:

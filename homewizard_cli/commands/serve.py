@@ -9,7 +9,12 @@ from rich.console import Console
 
 from ..client_factory import API_VERSIONS, resolve_client
 from ..client_v2 import _create_ssl_context
-from ..config import resolve_host
+from ..config import (
+    resolve_host,
+    resolve_no_verify,
+    resolve_timeout,
+    resolve_token,
+)
 from ..obis import lookup_obis
 
 app = typer.Typer()
@@ -134,7 +139,9 @@ def _create_app(
 @app.callback(invoke_without_command=True)
 def serve(
     host: str | None = typer.Option(None, "--host", "-H", help="P1 meter IP"),
-    timeout: float = typer.Option(3.0, "--timeout", "-t", help="HTTP timeout"),
+    timeout: float | None = typer.Option(
+        None, "--timeout", "-t", help="HTTP timeout (default: config, else 3.0 s)"
+    ),
     proxy: str | None = typer.Option(None, "--proxy", help="HTTP proxy URL"),
     bind: str = typer.Option(
         "127.0.0.1",
@@ -178,7 +185,7 @@ def serve(
 
 async def _serve_async(
     host: str | None,
-    request_timeout: float,
+    request_timeout: float | None,
     proxy: str | None,
     bind: str,
     port: int,
@@ -190,6 +197,11 @@ async def _serve_async(
 ):
     console = Console()
     host = resolve_host(host)
+    request_timeout = resolve_timeout(request_timeout)
+    # The proxy and the WebSocket both need the configured credentials, not the
+    # raw CLI defaults, or a token stored once in config.toml is dropped (#33).
+    token = resolve_token(token)
+    no_verify = resolve_no_verify(no_verify)
     if not _HAS_FASTAPI:
         console.print(
             "FastAPI and uvicorn are required for the serve command.\n"

@@ -20,6 +20,15 @@ def write_prometheus(data: DataResponse, console: Console):
         "# TYPE p1_total_power_export_kwh counter",
         f"p1_total_power_export_kwh {data.total_power_export_kwh}",
     ]
+    if data.active_power_l1_w is not None:
+        lines.extend(
+            [
+                "",
+                "# HELP p1_active_power_l1_w Phase 1 active power in watts",
+                "# TYPE p1_active_power_l1_w gauge",
+                f"p1_active_power_l1_w {data.active_power_l1_w}",
+            ]
+        )
     if data.active_power_l2_w is not None:
         lines.extend(
             [

@@ -94,7 +94,9 @@ def quality(
     alert: bool = typer.Option(False, "--alert", help="Only print when counts change"),
     events: bool = typer.Option(False, "--events", help="Show power failure event log"),
     host: str | None = typer.Option(None, "--host", "-H", help="P1 meter IP"),
-    timeout: float = typer.Option(3.0, "--timeout", "-t", help="HTTP timeout"),
+    timeout: float | None = typer.Option(
+        None, "--timeout", "-t", help="HTTP timeout (default: config, else 3.0 s)"
+    ),
     proxy: str | None = typer.Option(None, "--proxy", help="HTTP proxy URL"),
     api_version: str = typer.Option(
         "v2", "--api-version", help=f"API version ({'|'.join(API_VERSIONS)})"
@@ -125,7 +127,7 @@ async def _quality_async(
     alert: bool,
     show_events: bool,
     host: str | None,
-    request_timeout: float,
+    request_timeout: float | None,
     proxy: str | None,
     api_version: str = "v2",
     token: str | None = None,

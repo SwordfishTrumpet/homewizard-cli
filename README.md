@@ -1111,6 +1111,8 @@ homewizard-cli hass --rest
 
 Generates 7 sensors: Power, Energy Import, Energy Export, Gas, Water, Voltage L1, Current L1. Defaults to MQTT mode if neither `--mqtt` nor `--rest` is specified.
 
+On API v2 the generated REST sensors read `/api/measurement` over HTTPS, which requires the meter's token. Pass `--token` (or set `token` in `config.toml`) and every sensor carries `headers: {Authorization: Bearer <token>}`. Without a token the sensors are emitted with a warning, because they will answer 401 until you add the header yourself.
+
 **Options:**
 
 | Option           | Description                                                       |
@@ -1294,7 +1296,7 @@ Available on most data-output commands via `--format`:
 | `influx`      | InfluxDB line protocol                                     |
 | `prometheus`  | Prometheus exposition format                               |
 | `env`         | `KEY=VALUE` lines                                          |
-| `minimal`     | Tab-separated values, no header                            |
+| `minimal`     | One-line human summary, pipe-separated (`500.0 W | 239.9 V | 100.0 kWh in`) |
 | `raw`         | Raw `field:value` pairs                                    |
 | `mqtt`        | MQTT publish (`export` command only, requires `--broker`)  |
 
@@ -1330,7 +1332,7 @@ homewizard-cli info --token MY_TOKEN --no-verify
 
 **v2-only commands** (no v1 equivalent): `reboot`, `pair`, `users list`, `users delete`, `batteries`
 
-v2 measurement data is automatically mapped to v1 field names via the unified `Measurement` model so all formatters and display commands work seamlessly with both API versions. Fields without v2 equivalents (`wifi_ssid`, `wifi_strength`, `text_message`) default to empty values.
+v2 measurement data is automatically mapped to v1 field names via the unified `Measurement` model so all formatters and display commands work seamlessly with both API versions. Fields without v2 equivalents (`wifi_ssid`, `wifi_strength`, `text_message`) default to empty values. The v2 reading time is kept in `Measurement.timestamp`, appears as `timestamp` in JSON and as `0-0:1.0.0(...)` in `--format raw`.
 
 ---
 
@@ -1579,6 +1581,10 @@ pid_file = "/var/run/hw-export.pid"
 ```
 
 Export CLI options override config file values. Resolution order: CLI > config > hardcoded default.
+
+`[default]` applies to every command, including subcommands: `host`, `timeout`, `format`, `token` and `no_verify` are read when the command does not set the matching option, so `timeout = 10.0` reaches `homewizard-cli data` as well as the bare command.
+
+Each CSV and TSV row starts with a `timestamp` column that carries a UTC offset. When the meter reports its own reading time (API v2), that time is used; otherwise the moment the row was written is.
 
 Values are type-checked when the file is read. `no_verify`, `skip_unchanged` and `delta` must be unquoted TOML booleans: a quoted `"false"` is ignored, because read as text it would be true and would switch TLS verification off. `timeout`, `watch` and the tariff rates must be numbers, `qos` and `metrics_port` whole numbers. A value of the wrong type is ignored with a warning on stderr.
 

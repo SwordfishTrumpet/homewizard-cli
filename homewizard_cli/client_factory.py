@@ -2,7 +2,7 @@
 
 from .client import P1Client
 from .client_v2 import P1ClientV2
-from .config import load_config
+from .config import load_config, resolve_timeout
 from .errors import InvalidOptionError
 from .models import Measurement
 from .models.v2 import MeasurementV2
@@ -28,18 +28,20 @@ def validate_api_version(api_version: str) -> str:
 def resolve_client(
     api_version: str,
     host: str,
-    timeout: float = 3.0,
+    timeout: float | None = None,
     token: str | None = None,
     verify_cert: bool = True,
     proxy: str | None = None,
 ) -> P1Client | P1ClientV2:
     """Return the appropriate client for the given API version.
-    
-    Falls back to config file values for token and no_verify.
+
+    Falls back to config file values for token, no_verify and timeout: a
+    command passes ``None`` for --timeout so ``[default] timeout`` applies.
     SSL Safety: v2 with --no-verify requires --token to prevent
     insecure unauthenticated connections.
     """
     validate_api_version(api_version)
+    timeout = resolve_timeout(timeout)
     if api_version == "v2":
         cfg = load_config()
         if token is None and cfg.token:

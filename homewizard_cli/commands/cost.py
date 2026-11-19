@@ -8,7 +8,7 @@ from rich.console import Console
 from rich.table import Table
 
 from ..client_factory import resolve_client
-from ..config import load_config, resolve_host
+from ..config import load_config, resolve_format, resolve_host
 from ..config import TariffConfig
 from ..cost import CostCalculator
 from ..util import _print_json
@@ -22,12 +22,16 @@ app = typer.Typer()
 def cost(
     ctx: typer.Context,
     host: str | None = typer.Option(None, "--host", "-H", help="P1 meter IP"),
-    timeout: float = typer.Option(3.0, "--timeout", "-t", help="HTTP timeout"),
+    timeout: float | None = typer.Option(
+        None, "--timeout", "-t", help="HTTP timeout (default: config, else 3.0 s)"
+    ),
     api_version: str = typer.Option("v2", "--api-version", help="API version"),
     token: str | None = typer.Option(None, "--token", help="API v2 token"),
     no_verify: bool = typer.Option(False, "--no-verify", help="Disable SSL verification"),
     proxy: str | None = typer.Option(None, "--proxy", help="HTTP proxy URL"),
-    format: str = typer.Option("auto", "--format", "-f", help="Output format"),
+    format: str | None = typer.Option(
+        None, "--format", "-f", help="Output format (default: config, else auto)"
+    ),
     watch: float | None = typer.Option(None, "--watch", help="Poll interval in seconds"),
     today: bool = typer.Option(False, "--today", help="Today's cost from DB"),
     yesterday: bool = typer.Option(False, "--yesterday", help="Yesterday's cost from DB"),
@@ -69,12 +73,12 @@ def cost(
 
 async def _cost_async(
     host: str | None,
-    timeout: float,
+    timeout: float | None,
     api_version: str,
     token: str | None,
     no_verify: bool,
     proxy: str | None,
-    format: str,
+    format: str | None,
     watch: float | None,
     today: bool,
     yesterday: bool,
@@ -89,7 +93,7 @@ async def _cost_async(
     currency: str | None,
 ) -> None:
     console = Console()
-    output_format = get_format(format, console.is_terminal)
+    output_format = get_format(resolve_format(format), console.is_terminal)
 
     # Resolve tariff config: CLI > config > defaults
     cfg = load_config()
@@ -131,7 +135,19 @@ async def _cost_async(
             start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
             end = now
 
-        rows = store.query(start=start, end=end, fields=["total_power_import_kwh", "total_power_export_kwh", "active_tariff"])
+        rows = store.query(
+            start=start,
+            end=end,
+            fields=[
+                "total_power_import_kwh",
+                "total_power_import_t1_kwh",
+                "total_power_import_t2_kwh",
+                "total_power_import_t3_kwh",
+                "total_power_import_t4_kwh",
+                "total_power_export_kwh",
+                "active_tariff",
+            ],
+        )
         result = calc.calculate_history(rows)
         _write_cost(result, output_format, console, tariffs)
         store.close()

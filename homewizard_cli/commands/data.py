@@ -8,7 +8,7 @@ from rich.table import Table
 
 from ..alerting import AlertDispatcher
 from ..client_factory import API_VERSIONS, resolve_client
-from ..config import resolve_host
+from ..config import resolve_format, resolve_host, resolve_no_verify, resolve_token
 from ..expr import evaluate_until, is_valid_expression
 from ..format import Format, get_format, write_data
 from ..jsonpath import query_jsonpath
@@ -37,9 +37,13 @@ def data(
     fields: str | None = typer.Option(
         None, "--fields", help="Comma-separated field list"
     ),
-    format: str = typer.Option("auto", "--format", "-f", help="Output format"),
+    format: str | None = typer.Option(
+        None, "--format", "-f", help="Output format (default: config, else auto)"
+    ),
     host: str | None = typer.Option(None, "--host", "-H", help="P1 meter IP"),
-    timeout: float = typer.Option(3.0, "--timeout", "-t", help="HTTP timeout"),
+    timeout: float | None = typer.Option(
+        None, "--timeout", "-t", help="HTTP timeout (default: config, else 3.0 s)"
+    ),
     until: str | None = typer.Option(
         None, "--until", help="Exit when expression is true"
     ),
@@ -207,9 +211,9 @@ def _handle_data_output(
 async def _data_async(
     watch: float | None,
     fields: str | None,
-    format: str,
+    format: str | None,
     host: str | None,
-    request_timeout: float,
+    request_timeout: float | None,
     until: str | None = None,
     template: str | None = None,
     query: str | None = None,
@@ -245,7 +249,7 @@ async def _data_async(
             "         Device may become unresponsive.",
             style="yellow",
         )
-    output_format = get_format(format, console.is_terminal)
+    output_format = get_format(resolve_format(format), console.is_terminal)
     if until and not is_valid_expression(until):
         console.print(
             f"Invalid --until expression: {until}\n"
@@ -283,8 +287,13 @@ async def _data_async(
 
     if ws:
         ws_timeout = watch if watch is not None else 30.0
+        # Resolve the same credentials every other v2 command gets, or a token
+        # kept in config.toml is silently dropped here (#33).
         wsc = WebSocketClient(
-            host, token=token, verify_cert=not no_verify, timeout=ws_timeout
+            host,
+            token=resolve_token(token),
+            verify_cert=not resolve_no_verify(no_verify),
+            timeout=ws_timeout,
         )
         async with wsc as ws_conn:
             while True:

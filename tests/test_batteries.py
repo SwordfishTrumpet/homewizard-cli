@@ -1,3 +1,4 @@
+import pytest
 from typer.testing import CliRunner
 
 from homewizard_cli.main import app
@@ -100,3 +101,37 @@ def test_batteries_error():
         )
         assert result.exit_code == 3
         assert "HTTP 500" in result.output
+
+
+@pytest.mark.parametrize("status", [401, 403])
+def test_batteries_forbidden_write_is_not_reported_as_success(status):
+    """#35: a 401/403 on the battery-mode write must fail loudly."""
+    from unittest.mock import AsyncMock, patch
+
+    from homewizard_cli.errors import HttpError
+
+    with patch("homewizard_cli.commands.batteries.P1ClientV2") as mock_cls:
+        instance = AsyncMock()
+        mock_cls.return_value = instance
+        instance.__aenter__ = AsyncMock(return_value=instance)
+        instance.__aexit__ = AsyncMock(return_value=False)
+        instance.put_json = AsyncMock(side_effect=HttpError(status, "/api/batteries"))
+
+        result = runner.invoke(
+            app,
+            [
+                "batteries",
+                "--api-version",
+                "v2",
+                "--mode",
+                "to_full",
+                "--host",
+                "192.168.1.1",
+                "--token",
+                "t",
+            ],
+        )
+
+    assert result.exit_code != 0
+    assert "to_full" not in result.output
+    instance.put_json.assert_called_once()

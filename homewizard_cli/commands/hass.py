@@ -8,7 +8,7 @@ from ..util import _loads_json, _print_json
 from rich.console import Console
 
 from ..client_factory import API_VERSIONS, resolve_client
-from ..config import resolve_host
+from ..config import resolve_host, resolve_no_verify, resolve_token
 from ..models import Measurement
 from ..models.v2 import DeviceInfoV2, SystemV2
 
@@ -85,7 +85,9 @@ def hass(
         "homewizard", "--topic-prefix", help="MQTT state topic prefix"
     ),
     host: str | None = typer.Option(None, "--host", "-H", help="P1 meter IP"),
-    timeout: float = typer.Option(3.0, "--timeout", "-t", help="HTTP timeout"),
+    timeout: float | None = typer.Option(
+        None, "--timeout", "-t", help="HTTP timeout (default: config, else 3.0 s)"
+    ),
     proxy: str | None = typer.Option(None, "--proxy", help="HTTP proxy URL"),
     api_version: str = typer.Option(
         "v2", "--api-version", help=f"API version ({'|'.join(API_VERSIONS)})"
@@ -116,7 +118,7 @@ async def _hass_async(
     rest: bool,
     topic_prefix: str,
     host: str | None,
-    request_timeout: float,
+    request_timeout: float | None,
     proxy: str | None,
     api_version: str = "v2",
     token: str | None = None,
@@ -124,6 +126,8 @@ async def _hass_async(
 ):
     console = Console()
     host = resolve_host(host)
+    token = resolve_token(token)
+    no_verify = resolve_no_verify(no_verify)
     client = resolve_client(
         api_version,
         host,
@@ -172,19 +176,34 @@ async def _hass_async(
         sensors = []
         _protocol = "https" if api_version == "v2" else "http"
         _endpoint = "/api/measurement" if api_version == "v2" else "/api/v1/data"
+        _headers: dict[str, str] | None = None
+        if api_version == "v2":
+            if token:
+                # The generated sensors read the meter themselves, so they need
+                # the same credential this command used; without it every sensor
+                # answers 401 and the integration never shows a value (#34).
+                _headers = {"Authorization": f"Bearer {token}"}
+            else:
+                console.print(
+                    "Warning: v2 REST sensors need an Authorization header. "
+                    "Pass --token (or set 'token' in config.toml) to include "
+                    "one, or add it to each sensor by hand.",
+                    style="yellow",
+                )
         for name, device_class, state_class, unit, icon in _MQTT_SENSORS:
             field = _SENSOR_FIELD.get(name) or name.lower().replace(" ", "_")
-            sensors.append(
-                {
-                    "platform": "rest",
-                    "name": name,
-                    "device_class": device_class,
-                    "state_class": state_class,
-                    "unit_of_measurement": unit,
-                    "icon": icon,
-                    "value_template": _value_template(name),
-                    "resource": f"{_protocol}://{host}{_endpoint}",
-                    "device": device_cfg,
-                }
-            )
+            sensor = {
+                "platform": "rest",
+                "name": name,
+                "device_class": device_class,
+                "state_class": state_class,
+                "unit_of_measurement": unit,
+                "icon": icon,
+                "value_template": _value_template(name),
+                "resource": f"{_protocol}://{host}{_endpoint}",
+                "device": device_cfg,
+            }
+            if _headers is not None:
+                sensor["headers"] = _headers
+            sensors.append(sensor)
         _print_json(console, {"sensor": sensors}, indent=True)
