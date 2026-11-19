@@ -87,3 +87,47 @@ def test_sensor_fields_exist_in_measurement_model():
 
     missing = [f for f in _SENSOR_FIELD.values() if f not in Measurement.model_fields]
     assert missing == [], f"hass references missing fields: {missing}"
+
+
+# ── #34: v2 REST sensors carry the meter's credential ──────────
+
+
+def test_hass_rest_sensors_include_the_bearer_header():
+    """#34: v2 sensors without an Authorization header answer 401 forever."""
+    import json
+
+    from homewizard_cli.models import Measurement
+    from homewizard_cli.models.v2 import DeviceInfoV2, SystemV2
+
+    with patch(
+        "homewizard_cli.commands.hass.resolve_client",
+        return_value=AsyncMock(),
+    ) as mock_resolve:
+        client = mock_resolve.return_value
+        client.__aenter__ = AsyncMock(return_value=client)
+        client.__aexit__ = AsyncMock(return_value=False)
+        client.get_json_v2 = AsyncMock(
+            side_effect=[
+                DeviceInfoV2(
+                    product_name="P1 Meter",
+                    product_type="HWE-P1",
+                    serial="ABC123",
+                    firmware_version="4.2.1",
+                    api_version="v2",
+                ),
+                Measurement(active_power_w=500.0),
+                SystemV2(cloud_enabled=True),
+            ]
+        )
+
+        result = runner.invoke(
+            app,
+            ["hass", "--rest", "--host", "192.0.2.10", "--token", "SECRET_TOKEN"],
+        )
+
+    assert result.exit_code == 0
+    sensors = json.loads(result.output)["sensor"]
+    assert sensors
+    for sensor in sensors:
+        assert sensor["headers"] == {"Authorization": "Bearer SECRET_TOKEN"}
+        assert sensor["resource"] == "https://192.0.2.10/api/measurement"
