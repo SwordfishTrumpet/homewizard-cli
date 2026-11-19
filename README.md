@@ -1298,7 +1298,7 @@ Format auto-detection: `table` in interactive terminals, `json` when piped.
 
 ## API Versioning
 
-API v2 (HTTPS, port 443, Bearer token auth) is the default. Use `--api-version v1` to fall back to API v1 (HTTP, port 80, no auth).
+API v2 (HTTPS, port 443, Bearer token auth) is the default. Use `--api-version v1` to fall back to API v1 (HTTP, port 80, no auth). Any other value is refused with exit code 2 rather than silently reading the meter over v1.
 
 ```bash
 homewizard-cli data                    # v2 (default)
@@ -1341,7 +1341,7 @@ v2 measurement data is automatically mapped to v1 field names via the unified `M
 | `--no-color`      |       | `false`      | Disable ANSI colors                                |
 | `--quiet`         | `-q`  | `false`      | Suppress non-error output                          |
 | `--verbose`       | `-v`  | `false`      | Show HTTP request details                          |
-| `--api-version`   |       | `v2`         | API version: `v1` or `v2`                          |
+| `--api-version`   |       | `v2`         | API version: `v1` or `v2` (any other value is refused) |
 | `--token`         |       |              | API v2 Bearer token                                |
 | `--no-verify`     |       | `false`      | Disable SSL certificate verification (v2)          |
 | `--version`       |       |              | Show version and exit                              |
@@ -1574,6 +1574,10 @@ pid_file = "/var/run/hw-export.pid"
 
 Export CLI options override config file values. Resolution order: CLI > config > hardcoded default.
 
+Values are type-checked when the file is read. `no_verify`, `skip_unchanged` and `delta` must be unquoted TOML booleans: a quoted `"false"` is ignored, because read as text it would be true and would switch TLS verification off. `timeout`, `watch` and the tariff rates must be numbers, `qos` and `metrics_port` whole numbers. A value of the wrong type is ignored with a warning on stderr.
+
+A file that cannot be parsed is reported where it is needed, naming the line: `Could not read ~/.config/homewizard-cli/config.toml` with `Invalid TOML in ...: Expected newline ... (at line 3, column 15)`. Run `homewizard-cli config --validate` to check the file without talking to the meter.
+
 ---
 
 ## Shell Completions
@@ -1591,21 +1595,23 @@ Supports bash, zsh, fish, and PowerShell.
 
 Typed error hierarchy with distinct exit codes:
 
-| Exit Code | Error Type           | Description                            |
-|-----------|----------------------|----------------------------------------|
-| 1         | `P1Error` (generic)  | Unspecified error                      |
-| 2         | `NotFoundError`      | Device not found / unreachable         |
-| 3         | `HttpError`          | HTTP non-2xx response                  |
-| 4         | `TimeoutError`       | Request timed out                      |
-| 5         | `ParseError`         | Response parsing failed                |
-| 6         | `CrcError`           | Telegram CRC mismatch                  |
-| 7         | `WriteError`         | File/MQTT write failure                |
-| 8         | `UnsupportedError`   | Device does not support this feature   |
-| 10        | `SystemExit(10)`     | `--until` condition was met            |
+| Exit Code | Error Type                                   | Description                                               |
+|-----------|----------------------------------------------|-----------------------------------------------------------|
+| 1         | `P1Error` (generic)                          | Unspecified error                                         |
+| 2         | `DeviceNotFoundError`, `InvalidOptionError`  | Device unreachable, or an option value this build refuses  |
+| 3         | `HttpError`                                  | HTTP non-2xx response                                     |
+| 4         | `TimeoutError`                               | Request timed out (the message names the method and URL)  |
+| 5         | `ParseError`                                 | Response could not be parsed                              |
+| 6         | `CrcMismatchError`                           | Telegram CRC mismatch                                     |
+| 7         | `WriteError`                                 | File/MQTT write failure                                   |
+| 8         | `UnsupportedError`                           | Device does not support this feature                      |
+| 10        | `UntilConditionMetError`                     | `--until` condition was met                               |
 
 Device capability detection is not yet implemented; commands do not validate device type before execution. If a command is invoked on a device that does not support it, the raw HTTP error is surfaced instead.
 
 All errors are caught at the entry point (`main.py`) and printed in red with their exit code.
+
+A failure to connect is a `DeviceNotFoundError`, and a timeout, an HTTP error or an unparseable body names the meter and the request it belongs to, for example `Timeout after 3.0s: GET http://192.168.1.100/api/v1/data`.
 
 ---
 
@@ -1711,9 +1717,6 @@ uv run python -m mypy --check-untyped-defs homewizard_cli/ tests/
 # Run tests
 uv run python -m pytest tests/ -v
 
-# Run tests (current: 728 passing)
-uv run python -m pytest tests/ -v
-
 # Verify API docs build without warnings
 uv run python -m sphinx -b html docs docs/_build/html
 
@@ -1730,8 +1733,20 @@ uv run pre-commit install
 uv run pre-commit run --all-files
 ```
 
-Test fixtures live in `tests/fixtures/` (e.g., `api.json`, `data.json`, `system.json`). Mock patterns:
+The same checks are exposed as `package.json` scripts, so a tool that asks the
+repository what to run gets an answer instead of nothing:
 
+```bash
+npm run lint        # ruff
+npm run typecheck   # mypy --check-untyped-defs
+npm run test        # pytest
+npm run test:fast   # pytest, stopping at the first failure
+```
+
+Python is the implementation language. `package.json` carries only those
+commands, and `package-lock.json` marks npm as the tool that runs them.
+
+Test fixtures live in `tests/fixtures/` (e.g., `api.json`, `data.json`, `system.json`). Mock patterns:
 - **v1 commands:** Patch `homewizard_cli.commands.<cmd>.resolve_client` with `AsyncMock`, add `"--api-version", "v1"` to `runner.invoke()`
 - **v2 commands:** Patch `homewizard_cli.commands.<cmd>.resolve_client`, mock `get_json_v2`
 - **v2-only commands** (reboot, pair, users, batteries): Patch `homewizard_cli.commands.<cmd>.P1ClientV2` directly
