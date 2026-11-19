@@ -4,13 +4,19 @@ from rich.console import Console
 
 from homewizard_cli.models import Measurement
 
-from ..util import _crc16
+from ..util import _crc16, _iso_to_compact_timestamp
 
 
 def write_raw(data: Measurement, console: Console):
     """Output raw DSMR telegram reconstructed from available API data."""
     lines = [f"/{data.meter_model}"]
     lines.append("")
+    # The meter's own reading time (v2 reports it; v1 does not). Without it the
+    # telegram looks like it was read at the moment it was printed (#40).
+    if data.timestamp:
+        compact_ts = _iso_to_compact_timestamp(data.timestamp)
+        if compact_ts is not None:
+            lines.append(f"0-0:1.0.0({compact_ts}S)")
     lines.append(f"1-3:0.2.8({data.smr_version})")
     lines.append(f"0-0:96.1.1({data.unique_id})")
     lines.append(f"1-0:1.8.1({data.total_power_import_t1_kwh:06.3f}*kWh)")

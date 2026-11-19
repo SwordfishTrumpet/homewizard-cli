@@ -164,3 +164,21 @@ def test_iso_to_compact_timestamp_rejects_non_timestamps():
     assert _iso_to_compact_timestamp("2020-13-45T99:99:99") is None
     assert _iso_to_compact_timestamp("250529120000") is None
     assert _iso_to_compact_timestamp("2025-05-29T12:00:00+02:00") == 250529120000
+
+
+def test_v2_measurement_timestamp_survives_conversion():
+    """#40: /api/measurement reports a reading time; the model must keep it."""
+    payload = (FIXTURES / "measurement_v2.json").read_text()
+
+    v2 = MeasurementV2.model_validate_json(payload)
+    converted = Measurement.model_validate_json(payload)
+
+    assert v2.timestamp == "2026-05-29T12:00:00"
+    assert converted.timestamp == "2026-05-29T12:00:00"
+    assert converted.model_dump()["timestamp"] == "2026-05-29T12:00:00"
+
+
+def test_v1_measurement_has_no_timestamp():
+    """#40: v1 does not report one, so the field stays empty rather than invented."""
+    converted = Measurement.model_validate({"active_power_w": 100.0})
+    assert converted.timestamp is None

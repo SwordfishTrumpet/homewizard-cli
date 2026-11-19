@@ -63,6 +63,9 @@ class Measurement(BaseModel):
     meter_model: str = ""
     unique_id: str = ""
     active_tariff: int = 0
+    #: When the meter took this reading. API v2 reports it as an ISO 8601
+    #: string; v1 has no equivalent and leaves it empty (#40).
+    timestamp: str | None = None
 
     # Electricity - Totals
     total_power_import_kwh: float = 0.0

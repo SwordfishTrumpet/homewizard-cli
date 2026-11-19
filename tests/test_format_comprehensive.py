@@ -3,7 +3,7 @@
 import json
 from io import StringIO
 from typing import Any
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 from rich.console import Console
@@ -225,9 +225,9 @@ def test_csv_values():
     lines = out.strip().split("\n")
     values = lines[1].split(",")
     assert values[1] == "500.0"
-    assert values[8] == "100.0"  # import
-    assert values[9] == "0.0"  # export
-    assert values[10] == "7252.0"  # gas
+    assert values[9] == "100.0"  # import
+    assert values[10] == "0.0"  # export
+    assert values[11] == "7252.0"  # gas
 
 
 def test_csv_optional_fields_empty():
@@ -236,8 +236,8 @@ def test_csv_optional_fields_empty():
     out = _buf.getvalue()
     lines = out.strip().split("\n")
     values = lines[1].split(",")
-    assert values[3] == ""  # L1 voltage
-    assert values[10] == ""  # gas
+    assert values[5] == ""  # L1 voltage
+    assert values[11] == ""  # gas
 
 
 def test_csv_3phase():
@@ -246,8 +246,9 @@ def test_csv_3phase():
     out = _buf.getvalue()
     lines = out.strip().split("\n")
     values = lines[1].split(",")
-    assert "600.0" in values[2]  # L2 power
-    assert "400.0" in values[3]  # L3 power
+    assert values[2] == "500.0"  # L1 power
+    assert values[3] == "600.0"  # L2 power
+    assert values[4] == "400.0"  # L3 power
 
 
 # ── TSV ────────────────────────────────────────────────────────
@@ -278,8 +279,8 @@ def test_tsv_optional_fields_empty():
     out = _buf.getvalue()
     lines = out.split("\n")
     values = lines[1].split("\t")
-    assert values[3] == ""
-    assert values[10] == ""
+    assert values[5] == ""
+    assert values[11] == ""
 
 
 # ── ENV (Shell Export) ─────────────────────────────────────────
@@ -905,3 +906,97 @@ def test_raw_gas_line_placeholder_without_timestamp():
     buf = StringIO()
     write_raw(data, Console(file=buf, force_terminal=False, width=9999))
     assert "0-1:24.2.1(0000000000W)" in buf.getvalue()
+
+
+# ── #27: every per-phase machine export carries L1 ──────────────
+
+
+def test_every_machine_format_exports_phase_1_power():
+    """#27: L2 and L3 were exported while L1 was silently dropped."""
+    data = full_3phase_data()
+    expectations = {
+        "csv": ("active_power_l1_w", write_csv),
+        "tsv": ("active_power_l1_w", write_tsv),
+        "env": ("P1_ACTIVE_POWER_L1_W", write_env),
+        "influx": ("active_power_l1_w=500.0", write_influx),
+        "prometheus": ("p1_active_power_l1_w 500.0", write_prometheus),
+    }
+    for name, (needle, writer) in expectations.items():
+        c, buf = _console()
+        writer(data, c)
+        assert needle in buf.getvalue(), f"{name} lost phase 1 power"
+
+
+def test_csv_phase_columns_add_up_to_the_total():
+    """#27: the phases in the row must reconcile with the exported total."""
+    c, buf = _console()
+    write_csv(full_3phase_data(), c)
+    header, row = buf.getvalue().strip().splitlines()
+    row_values = dict(zip(header.split(","), row.split(",")))
+    phases = (
+        float(row_values["active_power_l1_w"])
+        + float(row_values["active_power_l2_w"])
+        + float(row_values["active_power_l3_w"])
+    )
+    assert phases == float(row_values["active_power_w"])
+
+
+# ── #39: CSV/TSV timestamps name one instant ───────────────────
+
+
+def _timestamp_cell(fmt: str, instant) -> str:
+    from datetime import datetime
+
+    class FakeDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            if tz is None:
+                return instant.astimezone().replace(tzinfo=None)
+            return instant.astimezone(tz)
+
+    c, buf = _console()
+    data = DataResponse(active_power_w=1.0)
+    if fmt == "csv":
+        with patch("homewizard_cli.format.csv.datetime", FakeDateTime):
+            write_csv(data, c)
+        return buf.getvalue().strip().splitlines()[1].split(",")[0]
+    with patch("homewizard_cli.format.tsv.datetime", FakeDateTime):
+        write_tsv(data, c)
+    return buf.getvalue().splitlines()[1].split("\t")[0]
+
+
+@pytest.mark.parametrize("fmt", ["csv", "tsv"])
+def test_export_timestamp_carries_an_offset(fmt):
+    """#39: a naive wall clock could not be converted back to an instant."""
+    from datetime import UTC, datetime
+
+    instant = datetime(2026, 7, 1, 12, 0, tzinfo=UTC)
+    cell = _timestamp_cell(fmt, instant)
+    parsed = datetime.fromisoformat(cell)
+    assert parsed.tzinfo is not None, cell
+    assert parsed.astimezone(UTC) == instant
+
+
+@pytest.mark.parametrize("fmt", ["csv", "tsv"])
+def test_export_timestamp_keeps_the_dst_fall_back_hour_apart(fmt):
+    """#39: 00:30Z and 01:30Z are different instants even at 02:30 local."""
+    from datetime import UTC, datetime
+
+    first = _timestamp_cell(fmt, datetime(2026, 10, 25, 0, 30, tzinfo=UTC))
+    second = _timestamp_cell(fmt, datetime(2026, 10, 25, 1, 30, tzinfo=UTC))
+    assert first != second
+
+
+@pytest.mark.parametrize("fmt", ["csv", "tsv"])
+def test_export_timestamp_prefers_the_meter_reading_time(fmt):
+    """#40: the meter's own reading time wins over the export clock."""
+    data = DataResponse(active_power_w=1.0, timestamp="2026-05-29T12:00:00")
+    c, buf = _console()
+    if fmt == "csv":
+        write_csv(data, c)
+        cell = buf.getvalue().strip().splitlines()[1].split(",")[0]
+    else:
+        write_tsv(data, c)
+        cell = buf.getvalue().splitlines()[1].split("\t")[0]
+    assert cell.startswith("2026-05-29T12:00:00")
+    assert cell[len("2026-05-29T12:00:00")] in "+-Z"

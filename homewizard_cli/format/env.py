@@ -9,6 +9,7 @@ def write_env(data: DataResponse, console: Console):
     """Output data as shell export statements."""
     mapping = {
         "P1_ACTIVE_POWER_W": data.active_power_w,
+        "P1_ACTIVE_POWER_L1_W": data.active_power_l1_w,
         "P1_ACTIVE_POWER_L2_W": data.active_power_l2_w,
         "P1_ACTIVE_POWER_L3_W": data.active_power_l3_w,
         "P1_ACTIVE_VOLTAGE_L1_V": data.active_voltage_l1_v,

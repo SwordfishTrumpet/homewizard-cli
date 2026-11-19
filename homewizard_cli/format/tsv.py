@@ -1,10 +1,12 @@
 """TSV output formatter."""
 
-from datetime import datetime
+from datetime import UTC, datetime
 
 from rich.console import Console
 
 from homewizard_cli.models import DataResponse
+
+from ..util import _meter_timestamp_with_offset
 
 
 def write_tsv(data: DataResponse, console: Console):
@@ -12,6 +14,7 @@ def write_tsv(data: DataResponse, console: Console):
     fields = [
         "timestamp",
         "active_power_w",
+        "active_power_l1_w",
         "active_power_l2_w",
         "active_power_l3_w",
         "active_voltage_l1_v",
@@ -23,8 +26,9 @@ def write_tsv(data: DataResponse, console: Console):
         "total_gas_m3",
     ]
     values = [
-        datetime.now().isoformat(),
+        _meter_timestamp_with_offset(data.timestamp) or datetime.now(UTC).isoformat(),
         str(data.active_power_w),
+        str(data.active_power_l1_w) if data.active_power_l1_w is not None else "",
         str(data.active_power_l2_w) if data.active_power_l2_w is not None else "",
         str(data.active_power_l3_w) if data.active_power_l3_w is not None else "",
         str(data.active_voltage_l1_v) if data.active_voltage_l1_v is not None else "",
