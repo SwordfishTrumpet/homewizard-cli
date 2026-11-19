@@ -1,4 +1,6 @@
 import asyncio
+import contextlib
+import signal
 from collections import deque
 
 import typer
@@ -12,7 +14,7 @@ from rich.text import Text
 from ..client_factory import API_VERSIONS, resolve_client
 from ..config import resolve_host
 from ..models import Measurement
-from ..storage import _setup_store
+from ..storage import MeasurementStore, _fetch_device_serial
 
 app = typer.Typer()
 
@@ -134,17 +136,41 @@ async def _dashboard_async(
     )
 
     async with client as c:
-        store, serial = await _setup_store(db, api_version, c)
+        # The serial is metadata, so the first reading does not wait for it: a
+        # failing /api/ used to stall the dashboard through the client's whole
+        # retry backoff, and --db wrote nothing before the operator stopped it
+        # (issue #17). Rows written before the serial arrives fall back to the
+        # reading's own unique_id in MeasurementStore.append.
+        store = MeasurementStore(db) if db else None
+        if store is not None:
+            store.migrate()
+        serial: str | None = None
+        serial_task: asyncio.Task[str | None] | None = None
+        if store is not None:
+            serial_task = asyncio.ensure_future(
+                _fetch_device_serial(c, api_version)
+            )
+        # Stop the loop on a signal instead of letting the default handler end
+        # the process: the store batches commits, so every row still buffered
+        # would be lost and `--db` would have written nothing (issue #17).
+        stop = asyncio.Event()
+        loop = asyncio.get_running_loop()
+        for sig in (signal.SIGINT, signal.SIGTERM):
+            with contextlib.suppress(NotImplementedError, AttributeError):
+                loop.add_signal_handler(sig, stop.set)
         try:
             with Live(layout, console=console, refresh_per_second=4, screen=True):
                 try:
-                    while True:
+                    while not stop.is_set():
                         if api_version == "v2":
                             data = await c.get_json_v2("/api/measurement", Measurement)
                         else:
                             data = await c.get_json("/api/v1/data", Measurement)
 
                         if store:
+                            if serial_task is not None and serial_task.done():
+                                serial = serial_task.result()
+                                serial_task = None
                             store.append(data.model_dump(), serial)
 
                         sparkline_data.append(data.active_power_w)
@@ -182,5 +208,12 @@ async def _dashboard_async(
         except KeyboardInterrupt:
             pass
         finally:
+            for sig in (signal.SIGINT, signal.SIGTERM):
+                with contextlib.suppress(NotImplementedError, AttributeError):
+                    loop.remove_signal_handler(sig)
+            if serial_task is not None and not serial_task.done():
+                serial_task.cancel()
+                with contextlib.suppress(asyncio.CancelledError, Exception):
+                    await serial_task
             if store:
                 store.close()

@@ -274,3 +274,89 @@ async def test_dashboard_async_keyboard_interrupt():
                 )
 
         client.get_json_v2.assert_awaited_once()
+
+
+# ---------------------------------------------------------------------------
+# --db rows reach the database even when the device-info call fails (#17)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_dashboard_writes_db_rows_before_device_info_answers(tmp_path):
+    """A failing /api/ must not stall the dashboard or lose its rows."""
+    import os
+    import signal
+    import sqlite3
+    import sys
+
+    if sys.platform == "win32":
+        pytest.skip("POSIX signal handling")
+
+    from homewizard_cli.commands import dashboard as dash_mod
+    from homewizard_cli.storage import MeasurementStore
+
+    db = tmp_path / "energy.db"
+    data = Measurement.model_validate(
+        {
+            "wifi_ssid": "T",
+            "wifi_strength": 80,
+            "smr_version": 50,
+            "meter_model": "M",
+            "unique_id": "u",
+            "active_tariff": 1,
+            "total_power_import_kwh": 100.0,
+            "total_power_import_t1_kwh": 50.0,
+            "total_power_import_t2_kwh": 50.0,
+            "total_power_export_kwh": 0.0,
+            "total_power_export_t1_kwh": 0.0,
+            "total_power_export_t2_kwh": 0.0,
+            "active_power_w": 123.0,
+        }
+    )
+    reads = {"n": 0}
+
+    async def fake_get(path: str, *args: Any) -> Measurement:
+        reads["n"] += 1
+        if reads["n"] == 3:
+            os.kill(os.getpid(), signal.SIGTERM)
+        return data
+
+    client = AsyncMock()
+    client.__aenter__ = AsyncMock(return_value=client)
+    client.__aexit__ = AsyncMock(return_value=None)
+    client.get = fake_get
+    client.get_json = fake_get
+
+    class _NullLive:
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            pass
+
+        def __enter__(self) -> _NullLive:
+            return self
+
+        def __exit__(self, *args: Any) -> None:
+            return None
+
+    # The serial lookup never answers: this is the failing-/api/ door.
+    async def never_answers(*args: Any) -> str | None:
+        await asyncio.Event().wait()
+        return None
+
+    with (
+        patch.object(dash_mod, "resolve_client", return_value=client),
+        patch.object(dash_mod, "Live", _NullLive),
+        patch.object(dash_mod, "_fetch_device_serial", never_answers),
+    ):
+        await dash_mod._dashboard_async(
+            0.01, "127.0.0.1", 1.0, None, api_version="v1", db=str(db)
+        )
+
+    assert reads["n"] >= 3
+    store = MeasurementStore(str(db))
+    store.close()
+    conn = sqlite3.connect(str(db))
+    try:
+        count = conn.execute("select count(*) from readings").fetchone()[0]
+    finally:
+        conn.close()
+    assert count >= 3
