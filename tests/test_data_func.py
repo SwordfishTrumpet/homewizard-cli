@@ -441,3 +441,41 @@ async def test_data_agg_table_format():
             agg=True,
             db=None,
         )
+
+
+# ---------------------------------------------------------------------------
+# #33: config.toml credentials reach the WebSocket client
+# ---------------------------------------------------------------------------
+
+
+def test_data_ws_uses_the_configured_credentials(monkeypatch, tmp_path):
+    """A token stored once in config.toml must not be dropped by --ws."""
+    import asyncio
+
+    from homewizard_cli import config as config_mod
+    from homewizard_cli.commands import data as data_mod
+
+    config_file = tmp_path / "config.toml"
+    config_file.write_text(
+        '[default]\nhost = "192.0.2.10"\ntoken = "CONFIG_TOKEN"\nno_verify = true\n'
+    )
+    monkeypatch.setattr(config_mod, "CONFIG_FILE", config_file)
+
+    captured: dict = {}
+
+    class StopProbe(Exception):
+        pass
+
+    class FakeWS:
+        def __init__(self, host, **kwargs):
+            captured["host"] = host
+            captured.update(kwargs)
+            raise StopProbe
+
+    with patch.object(data_mod, "WebSocketClient", FakeWS):
+        with pytest.raises(StopProbe):
+            asyncio.run(data_mod._data_async(None, None, "json", None, 3.0, ws=True))
+
+    assert captured["host"] == "192.0.2.10"
+    assert captured["token"] == "CONFIG_TOKEN"
+    assert captured["verify_cert"] is False

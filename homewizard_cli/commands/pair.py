@@ -6,7 +6,7 @@ import typer
 from rich.console import Console
 
 from ..client_v2 import P1ClientV2
-from ..config import resolve_host, resolve_no_verify
+from ..config import resolve_host, resolve_no_verify, resolve_timeout
 from ..errors import HttpError, P1Error, UnsupportedError
 
 app = typer.Typer()
@@ -18,7 +18,9 @@ def pair(
         "v2", "--api-version", help="API version (v2 only)"
     ),
     host: str | None = typer.Option(None, "--host", "-H", help="P1 meter IP"),
-    timeout: float = typer.Option(3.0, "--timeout", "-t", help="HTTP timeout"),
+    timeout: float | None = typer.Option(
+        None, "--timeout", "-t", help="HTTP timeout (default: config, else 3.0 s)"
+    ),
     name: str = typer.Option(
         "local/cli", "--name", help="User name (must start with local/)"
     ),
@@ -35,6 +37,7 @@ async def _pair_async(api_version, host: str | None, timeout, name, no_verify):
         raise UnsupportedError("This command only supports API v2")
     console = Console()
     host = resolve_host(host)
+    timeout = resolve_timeout(timeout)
     no_verify = resolve_no_verify(no_verify)
     try:
         async with P1ClientV2(host, timeout, verify_cert=not no_verify) as c:

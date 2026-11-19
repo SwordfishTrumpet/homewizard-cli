@@ -341,3 +341,47 @@ def test_resolve_host_reports_the_parse_error():
         with pytest.raises(DeviceNotFoundError) as exc_info:
             resolve_host(None)
     assert "Invalid TOML" in str(exc_info.value)
+
+
+# ── #29: a subcommand must honour [default] timeout and format ──
+
+
+def test_resolve_timeout_prefers_the_cli_value():
+    from homewizard_cli.config import resolve_timeout
+
+    assert resolve_timeout(1.5) == 1.5
+
+
+def test_resolve_timeout_reads_the_config_file():
+    """#29: a command passing None must pick up [default] timeout."""
+    from homewizard_cli.config import resolve_timeout
+
+    with (
+        patch("pathlib.Path.exists", return_value=True),
+        patch("pathlib.Path.read_text", return_value='[default]\ntimeout = 10.0\n'),
+    ):
+        assert resolve_timeout(None) == 10.0
+
+
+def test_resolve_timeout_falls_back_to_the_constant():
+    from homewizard_cli.config import resolve_timeout
+
+    with patch("pathlib.Path.exists", return_value=False):
+        assert resolve_timeout(None) == DEFAULT_TIMEOUT
+
+
+def test_resolve_format_reads_the_config_file():
+    """#29: [default] format was resolved and then discarded for subcommands."""
+    from homewizard_cli.config import resolve_format
+
+    with (
+        patch("pathlib.Path.exists", return_value=True),
+        patch("pathlib.Path.read_text", return_value='[default]\nformat = "csv"\n'),
+    ):
+        assert resolve_format(None) == "csv"
+
+
+def test_resolve_format_prefers_the_cli_value():
+    from homewizard_cli.config import resolve_format
+
+    assert resolve_format("json") == "json"

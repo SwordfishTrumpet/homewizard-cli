@@ -17,7 +17,9 @@ app = typer.Typer()
 def energy(
     tariffs: bool = typer.Option(False, "--tariffs", help="Show tariff breakdown"),
     host: str | None = typer.Option(None, "--host", "-H", help="P1 meter IP"),
-    timeout: float = typer.Option(3.0, "--timeout", "-t", help="HTTP timeout"),
+    timeout: float | None = typer.Option(
+        None, "--timeout", "-t", help="HTTP timeout (default: config, else 3.0 s)"
+    ),
     proxy: str | None = typer.Option(None, "--proxy", help="HTTP proxy URL"),
     api_version: str = typer.Option(
         "v2", "--api-version", help=f"API version ({'|'.join(API_VERSIONS)})"
@@ -48,7 +50,7 @@ def energy(
 async def _energy_async(
     tariffs: bool,
     host: str | None,
-    request_timeout: float,
+    request_timeout: float | None,
     proxy: str | None,
     api_version: str = "v2",
     token: str | None = None,

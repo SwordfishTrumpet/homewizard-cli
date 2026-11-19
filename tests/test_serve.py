@@ -487,3 +487,64 @@ async def test_serve_async_generates_a_proxy_token():
     generated = create.call_args.kwargs.get("auth_token")
     assert generated
     assert len(generated) >= 16
+
+
+# ---------------------------------------------------------------------------
+# #33: config.toml credentials reach the proxy
+# ---------------------------------------------------------------------------
+
+
+def test_serve_proxy_uses_the_configured_credentials(monkeypatch, tmp_path):
+    """A token stored once in config.toml must not be dropped by the proxy."""
+    import asyncio
+    import sys
+    import types
+
+    from homewizard_cli import config as config_mod
+    from homewizard_cli.client_v2 import P1ClientV2
+    from homewizard_cli.commands import serve as serve_mod
+
+    config_file = tmp_path / "config.toml"
+    config_file.write_text(
+        '[default]\nhost = "192.0.2.10"\ntoken = "CONFIG_TOKEN"\nno_verify = true\n'
+    )
+    monkeypatch.setattr(config_mod, "CONFIG_FILE", config_file)
+
+    captured: dict = {}
+
+    def fake_create_app(*args, **kwargs):
+        captured.update(kwargs)
+        return object()
+
+    class FakeServer:
+        def __init__(self, config):
+            pass
+
+        async def serve(self):
+            return None
+
+    fake_uvicorn = types.SimpleNamespace(
+        Config=lambda *a, **k: object(), Server=FakeServer
+    )
+
+    with (
+        patch.object(P1ClientV2, "get", AsyncMock(return_value="{}")),
+        patch.object(serve_mod, "_create_app", side_effect=fake_create_app),
+        patch.dict(sys.modules, {"uvicorn": fake_uvicorn}),
+    ):
+        asyncio.run(
+            serve_mod._serve_async(
+                None,
+                3.0,
+                None,
+                "127.0.0.1",
+                8000,
+                0,
+                api_version="v2",
+                token=None,
+                no_verify=False,
+            )
+        )
+
+    assert captured["token"] == "CONFIG_TOKEN"
+    assert captured["no_verify"] is True

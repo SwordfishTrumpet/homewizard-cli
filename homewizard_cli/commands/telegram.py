@@ -11,7 +11,7 @@ import typer
 from rich.console import Console
 
 from ..client_factory import API_VERSIONS, resolve_client
-from ..config import resolve_host
+from ..config import resolve_format, resolve_host
 from ..obis import lookup_obis
 from ..util import _crc16
 
@@ -23,10 +23,14 @@ def telegram(
     validate: bool = typer.Option(False, "--validate", help="Validate CRC"),
     obis: str | None = typer.Option(None, "--obis", help="Extract specific OBIS code"),
     watch: float | None = typer.Option(None, "--watch", "-w", help="Poll interval"),
-    format: str = typer.Option("auto", "--format", "-f", help="Output format"),
+    format: str | None = typer.Option(
+        None, "--format", "-f", help="Output format (default: config, else auto)"
+    ),
     rate: bool = typer.Option(False, "--rate", help="Count telegrams per minute"),
     host: str | None = typer.Option(None, "--host", "-H", help="P1 meter IP"),
-    timeout: float = typer.Option(3.0, "--timeout", "-t", help="HTTP timeout"),
+    timeout: float | None = typer.Option(
+        None, "--timeout", "-t", help="HTTP timeout (default: config, else 3.0 s)"
+    ),
     explain: str | None = typer.Option(None, "--explain", help="Explain an OBIS code"),
     named: bool = typer.Option(
         False, "--named", help="Use human-readable OBIS names in JSON output"
@@ -66,10 +70,10 @@ async def _telegram_async(
     explain: str | None,
     named: bool,
     watch: float | None,
-    format: str,
+    format: str | None,
     rate: bool,
     host: str | None,
-    request_timeout: float,
+    request_timeout: float | None,
     proxy: str | None = None,
     api_version: str = "v2",
     token: str | None = None,
@@ -92,7 +96,7 @@ async def _telegram_async(
             console.print(f"Unknown OBIS code: {explain}", style="yellow")
         return
 
-    output_json = format == "json"
+    output_json = resolve_format(format) == "json"
     rate_timestamps: deque[float] = deque()
 
     client = resolve_client(
