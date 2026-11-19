@@ -7,6 +7,7 @@
     "test:fast": "uv run python -m pytest tests/ -q -x",
     "lint": "uv run ruff check homewizard_cli/ tests/",
     "typecheck": "uv run python -m mypy --check-untyped-defs homewizard_cli/ tests/",
-    "run": "uv run homewizard-cli"
+    "run": "uv run homewizard-cli",
+    "build": "uv build"
   }
 }

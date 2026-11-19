@@ -5,6 +5,34 @@ All notable changes to homewizard-cli will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-11-19
+
+- Document the batch and register its checks (#28 and the shared docs)
+- Cover the v2 REST sensor credential (#34)
+- Build the image from the checkout and give the mypy hook its dependencies (#31, #32)
+- Add forbidden-case tests for privileged v2 writes (#35)
+- Sign the generated v2 REST sensors (#34)
+- Honour config.toml timeout, format and credentials in subcommands (#29, #33)
+- Make the history CSV and TSV exports machine-readable (#37, #38)
+- Carry the reading time and phase 1 power through the machine formats (#27, #39, #40)
+- Charge each tariff's own counter in cost estimates (#24, #25)
+- Retry a failed rotation instead of misfiling records (#20)
+- Require an inbound token on every serve route (#19)
+- Reject a non-timestamp string instead of inventing one (#48)
+- Ignore local virtualenv backups so a clean tree can be gated (#46)
+- Document the new error, config and tooling behaviour (#30, #36, #41, #42, #44, #45, #46)
+- Name the failing request, wrap transport and parse failures, and stop retrying writes (#30, #41, #42, #45, #23, #47)
+- Keep bracketed text in error messages (#43)
+- Surface the database error when export --db cannot start (#21)
+- Print the real gas timestamp in the reconstructed telegram (#26)
+- Say when an --alert-cmd failed instead of reporting a delivered alert (#22)
+- Type-check the config file, and report a TOML typo instead of ignoring it (#36, #44)
+- Write dashboard --db rows while the device-info call is failing (#17)
+- Expose the repository's checks so tooling can find them (#46)
+- Print raw DSMR power in kW instead of watts (#18)
+- Store readings when the serial lookup fails, and refuse a non-positive retention (#16, #17)
+- uv lock --upgrade, fix stale requirements.txt (#15)
+
 ## [0.3.0] - 2026-08-06
 
 ### Fixed

@@ -15,7 +15,7 @@
       {
         packages.default = python.pkgs.buildPythonApplication {
           pname = "homewizard-cli";
-          version = "0.3.0";
+          version = "0.4.0";
           pyproject = true;
 
           src = ./.;
