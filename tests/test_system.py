@@ -1,3 +1,4 @@
+import pytest
 from typer.testing import CliRunner
 
 from homewizard_cli.main import app
@@ -157,3 +158,26 @@ def test_system_write_error():
         result = runner.invoke(app, ["system", "--cloud", "--host", "192.168.1.1"])
         assert result.exit_code != 0
         assert "HTTP 500" in result.output or "HTTP 500" in str(result.exception or "")
+
+
+@pytest.mark.parametrize("status", [401, 403])
+def test_system_cloud_write_forbidden_is_not_reported_as_success(status):
+    """#35: a 401/403 on the system write must fail loudly."""
+    from unittest.mock import AsyncMock, patch
+
+    from homewizard_cli.errors import HttpError
+
+    with patch(
+        "homewizard_cli.commands.system.resolve_client",
+        return_value=AsyncMock(),
+    ) as mock_resolve:
+        client = mock_resolve.return_value
+        client.__aenter__ = AsyncMock(return_value=client)
+        client.__aexit__ = AsyncMock(return_value=False)
+        client.put_json = AsyncMock(side_effect=HttpError(status, "/api/system"))
+
+        result = runner.invoke(app, ["system", "--cloud", "--host", "192.168.1.1"])
+
+    assert result.exit_code != 0
+    assert "cloud_enabled" not in result.output
+    client.put_json.assert_called_once()

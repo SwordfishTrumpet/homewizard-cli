@@ -1,5 +1,6 @@
 """Tests for the state CLI command."""
 
+import pytest
 from typer.testing import CliRunner
 
 from homewizard_cli.main import app
@@ -228,3 +229,36 @@ def test_state_error():
         )
         assert result.exit_code == 3
         assert "HTTP 500" in result.output
+
+
+@pytest.mark.parametrize("status", [401, 403])
+def test_state_power_write_forbidden_is_not_reported_as_success(status):
+    """#35: a 401/403 on the power write must fail loudly."""
+    from unittest.mock import AsyncMock, patch
+
+    from homewizard_cli.errors import HttpError
+
+    with patch("homewizard_cli.commands.state.P1ClientV2") as mock_cls:
+        instance = AsyncMock()
+        mock_cls.return_value = instance
+        instance.__aenter__ = AsyncMock(return_value=instance)
+        instance.__aexit__ = AsyncMock(return_value=False)
+        instance.put_json = AsyncMock(side_effect=HttpError(status, "/api/state"))
+
+        result = runner.invoke(
+            app,
+            [
+                "state",
+                "--api-version",
+                "v2",
+                "--power-on",
+                "--host",
+                "192.168.1.1",
+                "--token",
+                "t",
+            ],
+        )
+
+    assert result.exit_code != 0
+    assert "power_on" not in result.output
+    instance.put_json.assert_called_once()
