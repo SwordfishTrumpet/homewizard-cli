@@ -19,7 +19,7 @@ from ..expr import evaluate_until, is_valid_expression
 from ..format import Format, get_format, write_data
 from ..models import Measurement
 from ..state import Aggregator, DeltaTracker
-from ..storage import _setup_store
+from ..storage import MeasurementStore, _setup_store
 from ..util import _dumps_json, _print_json
 
 app = typer.Typer()
@@ -417,6 +417,12 @@ async def _export_async(
 
     shutdown_event = asyncio.Event()
     _install_signal_handlers(shutdown_event)
+
+    # Declared before the try so the finally block can run every cleanup step
+    # even when _setup_store fails; referencing an unassigned name there masked
+    # the real database error with an UnboundLocalError and skipped the PID
+    # file removal (issue #21).
+    store: MeasurementStore | None = None
 
     try:
         async with client as c:

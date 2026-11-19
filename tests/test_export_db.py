@@ -169,3 +169,37 @@ def test_export_retain_days_rejects_non_positive():
     finally:
         with contextlib.suppress(OSError):
             os.unlink(db_path)
+
+
+def test_export_db_startup_failure_reports_the_database_error(tmp_path):
+    """#21: a failing --db path must surface the sqlite error and clean up the PID file."""
+    pid_file = tmp_path / "export.pid"
+    db_path = tmp_path / "missing-dir" / "energy.db"
+
+    mock_client = AsyncMock()
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
+
+    with patch(
+        "homewizard_cli.commands.export.resolve_client", return_value=mock_client
+    ):
+        result = runner.invoke(
+            app,
+            [
+                "export",
+                "--host",
+                "127.0.0.1",
+                "--format",
+                "json",
+                "--db",
+                str(db_path),
+                "--pid-file",
+                str(pid_file),
+            ],
+        )
+
+    assert result.exit_code != 0
+    problem = f"{result.output}{result.exception!s}"
+    assert "local variable 'store'" not in problem
+    assert "unable to open database file" in problem
+    assert not pid_file.exists()
