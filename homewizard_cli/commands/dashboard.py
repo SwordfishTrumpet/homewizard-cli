@@ -144,7 +144,7 @@ async def _dashboard_async(
                         else:
                             data = await c.get_json("/api/v1/data", Measurement)
 
-                        if store and serial:
+                        if store:
                             store.append(data.model_dump(), serial)
 
                         sparkline_data.append(data.active_power_w)

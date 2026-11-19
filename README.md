@@ -868,7 +868,7 @@ homewizard-cli export --format json --watch 2 | curl -X POST http://influxdb:808
 | `--metrics-port`  | Enable Prometheus metrics HTTP endpoint on this port (0=disabled)   |
 | `--pid-file`      | Write PID to file for process management (removed on exit)          |
 | `--db`            | SQLite database path for historical logging (e.g. `energy.db`)      |
-| `--retain-days`   | Auto-prune rows older than N days (never by default)                |
+| `--retain-days`   | Auto-prune rows older than N days; N must be at least 1 (never by default) |
 
 #### Export Features
 

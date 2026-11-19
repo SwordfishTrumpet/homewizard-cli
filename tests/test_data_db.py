@@ -261,3 +261,47 @@ def test_water_db_writes_row():
     finally:
         with contextlib.suppress(OSError):
             os.unlink(db_path)
+
+
+def test_data_db_logs_row_when_device_info_fails():
+    """#17: a failing /api device-info call must not silently skip the row.
+
+    The serial lookup is metadata; when it fails the reading is still stored
+    under the meter's own unique_id instead of being dropped.
+    """
+    with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
+        db_path = f.name
+    try:
+        with patch("homewizard_cli.commands.data.resolve_client") as mock_resolve:
+            mock_instance = _make_mock_v2_client()
+            measurement = Measurement(
+                wifi_ssid="Test",
+                wifi_strength=80,
+                smr_version=50,
+                meter_model="TEST",
+                unique_id="abc123",
+                active_tariff=1,
+                total_power_import_kwh=1000.0,
+                total_power_import_t1_kwh=500.0,
+                total_power_import_t2_kwh=500.0,
+                total_power_export_kwh=0.0,
+                total_power_export_t1_kwh=0.0,
+                total_power_export_t2_kwh=0.0,
+                active_power_w=500.0,
+            )
+            mock_instance.get_json_v2 = AsyncMock(
+                side_effect=[RuntimeError("device info unavailable"), measurement]
+            )
+            mock_resolve.return_value = mock_instance
+
+            result = runner.invoke(app, ["data", "--db", db_path, "--format", "json"])
+            assert result.exit_code == 0
+
+            store = MeasurementStore(db_path)
+            rows = store.query()
+            assert len(rows) == 1
+            assert rows[0]["device_serial"] == "abc123"
+            store.close()
+    finally:
+        with contextlib.suppress(OSError):
+            os.unlink(db_path)

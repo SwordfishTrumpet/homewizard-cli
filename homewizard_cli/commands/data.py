@@ -347,7 +347,7 @@ async def _data_async(
                 else:
                     d = await c.get_json("/api/v1/data", Measurement)
 
-                if store and serial:
+                if store:
                     store.append(d.model_dump(), serial)
 
                 if until and evaluate_until(d.model_dump(), until):

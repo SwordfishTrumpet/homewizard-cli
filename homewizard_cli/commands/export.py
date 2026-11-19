@@ -255,6 +255,13 @@ async def _export_async(
     console = Console()
     host = resolve_host(host)
 
+    if retain_days is not None and retain_days < 1:
+        raise P1Error(
+            f"--retain-days must be at least 1 day (got {retain_days}): "
+            "refusing to prune history",
+            code=2,
+        )
+
     # Load config and resolve export-specific defaults
     cfg = load_config()
     export_cfg = cfg.export if cfg.export else None
@@ -421,7 +428,7 @@ async def _export_async(
                         data = await c.get_json_v2("/api/measurement", Measurement)
                     else:
                         data = await c.get_json("/api/v1/data", Measurement)
-                    if store and serial:
+                    if store:
                         store.append(data.model_dump(), serial)
                         prune_counter += 1
                         if retain_days is not None and prune_counter % 60 == 0:
