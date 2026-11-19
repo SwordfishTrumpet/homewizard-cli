@@ -3,10 +3,26 @@
 from .client import P1Client
 from .client_v2 import P1ClientV2
 from .config import load_config
+from .errors import InvalidOptionError
 from .models import Measurement
 from .models.v2 import MeasurementV2
 
 API_VERSIONS = ["v1", "v2"]
+
+
+def validate_api_version(api_version: str) -> str:
+    """Return *api_version* when this build supports it, else refuse it.
+
+    Any value other than "v2" used to fall through to the v1 client, so a
+    typo such as ``--api-version V2`` silently read the meter over plain HTTP
+    with no token while reporting success (issue #30).
+    """
+    if api_version not in API_VERSIONS:
+        raise InvalidOptionError(
+            f"Unknown --api-version {api_version!r}: "
+            f"choose one of {', '.join(API_VERSIONS)}"
+        )
+    return api_version
 
 
 def resolve_client(
@@ -23,11 +39,12 @@ def resolve_client(
     SSL Safety: v2 with --no-verify requires --token to prevent
     insecure unauthenticated connections.
     """
+    validate_api_version(api_version)
     if api_version == "v2":
         cfg = load_config()
         if token is None and cfg.token:
             token = cfg.token
-        if verify_cert and cfg.no_verify:
+        if verify_cert and cfg.no_verify is True:
             verify_cert = False
         if not verify_cert and token is None:
             import sys

@@ -48,8 +48,22 @@ def _loads_json(data: str | bytes) -> Any:
 
 
 def _iso_to_compact_timestamp(iso_str: str | None) -> int | None:
-    """Convert ISO 8601 timestamp to v1 compact YYMMDDhhmmss int."""
-    if not iso_str:
+    """Convert ISO 8601 timestamp to v1 compact YYMMDDhhmmss int.
+
+    The layout is checked before the slices are read: a long digit string is
+    not a timestamp, and returning a fabricated value for one would store a
+    plausible but wrong reading time (issue #48). The slicing stays manual
+    because it is an order of magnitude faster than strptime (PERF-1).
+    """
+    if not iso_str or len(iso_str) < 19:
+        return None
+    if (
+        iso_str[4] != "-"
+        or iso_str[7] != "-"
+        or iso_str[10] not in ("T", " ")
+        or iso_str[13] != ":"
+        or iso_str[16] != ":"
+    ):
         return None
     try:
         y = int(iso_str[2:4])
@@ -58,9 +72,18 @@ def _iso_to_compact_timestamp(iso_str: str | None) -> int | None:
         h = int(iso_str[11:13])
         mi = int(iso_str[14:16])
         s = int(iso_str[17:19])
-        return y * 10_000_000_000 + mo * 100_000_000 + d * 1_000_000 + h * 10_000 + mi * 100 + s
-    except (ValueError, IndexError):
+    except ValueError:
         return None
+    if not (1 <= mo <= 12 and 1 <= d <= 31 and h <= 23 and mi <= 59 and s <= 59):
+        return None
+    return (
+        y * 10_000_000_000
+        + mo * 100_000_000
+        + d * 1_000_000
+        + h * 10_000
+        + mi * 100
+        + s
+    )
 
 
 _CRC16_TABLE = [

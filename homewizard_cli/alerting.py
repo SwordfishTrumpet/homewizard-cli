@@ -79,6 +79,13 @@ class AlertDispatcher:
                 stdout=asyncio.subprocess.DEVNULL,
                 stderr=asyncio.subprocess.DEVNULL,
             )
-            await proc.wait()
+            returncode = await proc.wait()
+            if returncode != 0:
+                # A failed notifier must never be reported as a delivered alert
+                # (issue #22): the condition is still met, but say the alert
+                # did not happen.
+                log.warning(
+                    "Alert command '%s' failed: exited %s", cmd, returncode
+                )
         except Exception as e:
             log.warning("Alert command '%s' failed: %s", cmd, e)

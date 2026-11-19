@@ -191,3 +191,68 @@ async def test_client_proxy_scheme_prefers_https_for_https():
             _get_proxy_url("http://custom:3128", scheme="https")
             == "http://custom:3128"
         )
+
+
+# ── transport and parse failures name what failed (issues #41, #42, #45, #23) ──
+
+
+@pytest.mark.asyncio
+async def test_timeout_message_names_host_and_path():
+    """#41: a timeout must say which request timed out."""
+    with patch("httpx.AsyncClient.get", side_effect=httpx.ConnectTimeout("timeout")):
+        async with P1Client("192.168.1.1", timeout=0.2) as client:
+            client._retries = 1
+            with pytest.raises(TimeoutError) as exc_info:
+                await client.get("/api/v1/data")
+    message = str(exc_info.value)
+    assert "192.168.1.1" in message
+    assert "GET http://192.168.1.1/api/v1/data" in message
+
+
+@pytest.mark.asyncio
+async def test_connect_error_becomes_device_not_found():
+    """#42: a transport failure is a P1Error naming the host, with exit code 2."""
+    from homewizard_cli.errors import DeviceNotFoundError
+
+    with patch(
+        "httpx.AsyncClient.get",
+        side_effect=httpx.ConnectError("All connection attempts failed"),
+    ):
+        async with P1Client("192.168.1.1", timeout=0.2) as client:
+            with pytest.raises(DeviceNotFoundError) as exc_info:
+                await client.get("/api/v1/data")
+    assert exc_info.value.code == 2
+    assert "192.168.1.1" in str(exc_info.value)
+
+
+@pytest.mark.asyncio
+async def test_unparsable_json_raises_parse_error():
+    """#45: malformed device JSON is a ParseError (exit 5) naming the request."""
+    from homewizard_cli.errors import ParseError
+
+    async with P1Client("192.168.1.1") as client:
+        client.get = AsyncMock(return_value="not json at all")
+        with pytest.raises(ParseError) as exc_info:
+            await client.get_json("/api/v1/data", DataResponse)
+    assert exc_info.value.code == 5
+    assert "/api/v1/data" in str(exc_info.value)
+
+
+@pytest.mark.asyncio
+async def test_put_json_is_sent_once_after_timeout():
+    """#23: a timed-out write is not retried, so the device acts once."""
+    calls = []
+
+    def handler(request):
+        calls.append(request)
+        raise httpx.ReadTimeout("response lost after commit", request=request)
+
+    async with P1Client("192.168.1.1", timeout=0.2) as client:
+        await client._client.aclose()
+        client._client = httpx.AsyncClient(
+            base_url="http://192.168.1.1", transport=httpx.MockTransport(handler)
+        )
+        client._backoff_base = 0.01
+        with pytest.raises(TimeoutError):
+            await client.put_json("/api/v1/identify", {})
+    assert len(calls) == 1

@@ -233,13 +233,13 @@ def main():
         app()
     except P1Error as e:
         console = Console(stderr=True)
-        console.print(str(e), style="red")
+        console.print(str(e), style="red", markup=False)
         sys.exit(e.code)
     except SystemExit:
         raise
     except Exception as e:
         console = Console(stderr=True)
-        console.print(f"Error: {e}", style="red")
+        console.print(f"Error: {e}", style="red", markup=False)
         sys.exit(1)
 
 

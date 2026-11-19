@@ -7,6 +7,8 @@ import sqlite3
 import tempfile
 from datetime import datetime, timedelta
 
+import pytest
+
 from homewizard_cli.storage import MeasurementStore, _measurement_columns
 
 
@@ -292,6 +294,46 @@ class TestMeasurementStore:
             deleted = store.retain(5)
             assert deleted == 1
             assert store.info()["row_count"] == 1
+            store.close()
+        finally:
+            os.unlink(db_path)
+
+    def test_retain_rejects_non_positive_days(self):
+        """#16: a negative or zero day count must never delete the whole table."""
+        with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
+            db_path = f.name
+        try:
+            store = _store_with_data(db_path, "DEV001", 5)
+            for bad in (-1, 0):
+                with pytest.raises(ValueError, match="at least 1 day"):
+                    store.retain(bad)
+            assert store.info()["row_count"] == 5
+            store.close()
+        finally:
+            os.unlink(db_path)
+
+    def test_append_without_serial_falls_back_to_unique_id(self):
+        """#17: a failed device-info call must not drop the reading."""
+        with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
+            db_path = f.name
+        try:
+            store = MeasurementStore(db_path)
+            store.append(_sample_data(), None)
+            rows = store.query()
+            assert len(rows) == 1
+            assert rows[0]["device_serial"] == "abc123"  # the reading's unique_id
+            store.close()
+        finally:
+            os.unlink(db_path)
+
+    def test_append_without_serial_or_unique_id_uses_unknown(self):
+        """#17: still writes a row when neither identity is available."""
+        with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
+            db_path = f.name
+        try:
+            store = MeasurementStore(db_path)
+            store.append(_sample_data({"unique_id": ""}), None)
+            assert store.list_devices() == ["unknown"]
             store.close()
         finally:
             os.unlink(db_path)

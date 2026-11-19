@@ -1,0 +1,12 @@
+{
+  "name": "homewizard-cli",
+  "private": true,
+  "description": "Tooling entry point for a Python project. The CLI lives in homewizard_cli/; these scripts expose the checks AGENTS.md documents so any tool that asks the repository what to run gets an answer.",
+  "scripts": {
+    "test": "uv run python -m pytest tests/ -q",
+    "test:fast": "uv run python -m pytest tests/ -q -x",
+    "lint": "uv run ruff check homewizard_cli/ tests/",
+    "typecheck": "uv run python -m mypy --check-untyped-defs homewizard_cli/ tests/",
+    "run": "uv run homewizard-cli"
+  }
+}

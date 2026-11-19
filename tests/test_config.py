@@ -251,3 +251,93 @@ def test_resolve_host_no_host_raises_guidance():
             resolve_host(None)
     assert "--host" in str(exc_info.value)
     assert exc_info.value.code == 2
+
+
+# ── typed config values (issues #36, #44) ─────────────────────
+
+
+def test_quoted_no_verify_is_ignored_not_true():
+    """#36: no_verify = "false" must not disable TLS verification."""
+    toml_content = """
+[default]
+host = "192.168.1.1"
+no_verify = "false"
+"""
+    with (
+        patch("pathlib.Path.exists", return_value=True),
+        patch("pathlib.Path.read_text", return_value=toml_content),
+    ):
+        config = load_config()
+        assert config.no_verify is None
+
+
+def test_boolean_no_verify_is_kept():
+    toml_content = """
+[default]
+no_verify = true
+"""
+    with (
+        patch("pathlib.Path.exists", return_value=True),
+        patch("pathlib.Path.read_text", return_value=toml_content),
+    ):
+        assert load_config().no_verify is True
+
+
+def test_wrong_typed_values_are_ignored():
+    """A string timeout, qos or metrics_port is dropped instead of reaching httpx."""
+    toml_content = """
+[default]
+host = "192.168.1.1"
+timeout = "5"
+[export]
+qos = "2"
+metrics_port = "9090"
+"""
+    with (
+        patch("pathlib.Path.exists", return_value=True),
+        patch("pathlib.Path.read_text", return_value=toml_content),
+    ):
+        config = load_config()
+    assert config.host == "192.168.1.1"
+    assert config.timeout is None
+    assert config.export is not None
+    assert config.export.qos is None
+    assert config.export.metrics_port is None
+
+
+def test_invalid_format_falls_back_to_default():
+    toml_content = """
+[default]
+format = "yamlish"
+"""
+    with (
+        patch("pathlib.Path.exists", return_value=True),
+        patch("pathlib.Path.read_text", return_value=toml_content),
+    ):
+        assert load_config().format is None
+
+
+def test_unparsable_config_records_the_parse_error():
+    """#44: a TOML typo must not be swallowed into defaults."""
+    toml_content = '[default]\nhost = "192.0.2.10"\ntimeout = 1.5 "oops"\n'
+    with (
+        patch("pathlib.Path.exists", return_value=True),
+        patch("pathlib.Path.read_text", return_value=toml_content),
+    ):
+        config = load_config()
+    assert config.parse_error is not None
+    assert "Invalid TOML" in config.parse_error
+
+
+def test_resolve_host_reports_the_parse_error():
+    """#44: the recovery must name the parse failure, not repeat 'set host'."""
+    from homewizard_cli.errors import DeviceNotFoundError
+
+    toml_content = '[default]\nhost = "192.0.2.10"\ntimeout = 1.5 "oops"\n'
+    with (
+        patch("pathlib.Path.exists", return_value=True),
+        patch("pathlib.Path.read_text", return_value=toml_content),
+    ):
+        with pytest.raises(DeviceNotFoundError) as exc_info:
+            resolve_host(None)
+    assert "Invalid TOML" in str(exc_info.value)

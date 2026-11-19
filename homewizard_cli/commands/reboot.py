@@ -44,5 +44,5 @@ async def _reboot_async(api_version, host: str | None, timeout, token, no_verify
             result = await c.put_json("/api/system/reboot", {})
             console.print(f"Reboot result: {_dumps_json(result)}")
     except P1Error as e:
-        console.print(str(e), style="red")
+        console.print(str(e), style="red", markup=False)
         raise typer.Exit(code=e.code) from e

@@ -95,5 +95,5 @@ async def _state_async(
                 s = await c.get_json_v2("/api/state", StateResponse)
                 console.print(s.model_dump_json(indent=2))
     except P1Error as e:
-        console.print(str(e), style="red")
+        console.print(str(e), style="red", markup=False)
         raise typer.Exit(code=e.code) from e

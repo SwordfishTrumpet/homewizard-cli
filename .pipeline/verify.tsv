@@ -1,0 +1,16 @@
+16	uv run python -m pytest tests/test_export_db.py::test_export_retain_days_rejects_non_positive -q	0	data-integrity
+17	uv run python -m pytest tests/test_data_db.py::test_data_db_logs_row_when_device_info_fails tests/test_dashboard.py::test_dashboard_writes_db_rows_before_device_info_answers -q	0	data-integrity
+18	uv run python -m pytest tests/test_format_comprehensive.py::test_raw_power_fields_are_converted_w_to_kw -q	0	domain
+46	uv run python -m pytest tests/test_tooling.py -q	0	build
+36	uv run python -m pytest tests/test_config.py::test_quoted_no_verify_is_ignored_not_true -q	0	security
+41	uv run python -m pytest tests/test_client.py::test_timeout_message_names_host_and_path -q	0	observability
+42	uv run python -m pytest tests/test_client.py::test_connect_error_becomes_device_not_found -q	0	usability
+43	uv run python -m pytest tests/test_main_errors.py::test_main_keeps_bracketed_error_text -q	0	prose
+44	uv run python -m pytest tests/test_config.py::test_resolve_host_reports_the_parse_error -q	0	usability
+45	uv run python -m pytest tests/test_client.py::test_unparsable_json_raises_parse_error -q	0	observability
+30	uv run python -m pytest tests/test_client_factory.py::test_unknown_api_version_is_refused -q	0	deployment
+22	uv run python -m pytest tests/test_alerting.py::TestFailingAlertCommand -q	0	correctness
+21	uv run python -m pytest tests/test_export_db.py::test_export_db_startup_failure_reports_the_database_error -q	0	data-integrity
+26	uv run python -m pytest tests/test_format_comprehensive.py::test_raw_gas_line_keeps_gas_timestamp -q	0	domain
+23	uv run python -m pytest tests/test_client.py::test_put_json_is_sent_once_after_timeout tests/test_client_v2.py::TestWritesAreNotRetried -q	0	reliability
+48	uv run python -m pytest tests/test_models.py::test_iso_to_compact_timestamp_rejects_non_timestamps tests/test_property_based.py -q	0	correctness

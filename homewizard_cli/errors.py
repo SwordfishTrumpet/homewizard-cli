@@ -30,6 +30,13 @@ class DeviceNotFoundError(P1Error):
         super().__init__(message, code=2, details=details)
 
 
+class InvalidOptionError(P1Error):
+    """A command-line value this build does not accept (exit code 2)."""
+
+    def __init__(self, message: str):
+        super().__init__(message, code=2)
+
+
 class HttpError(P1Error):
     def __init__(self, status: int, url: str):
         self.status = status
@@ -37,8 +44,17 @@ class HttpError(P1Error):
 
 
 class TimeoutError(P1Error):
-    def __init__(self, timeout: float):
-        super().__init__(f"Timeout after {timeout}s", code=4)
+    """A request timed out.
+
+    ``request`` names the method and URL that timed out, so a message with more
+    than one meter or endpoint still says which operation failed.
+    """
+
+    def __init__(self, timeout: float, request: str | None = None):
+        message = f"Timeout after {timeout}s"
+        if request:
+            message = f"{message}: {request}"
+        super().__init__(message, code=4)
 
 
 class ParseError(P1Error):

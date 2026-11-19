@@ -59,7 +59,7 @@ async def _users_list_async(api_version, host: str | None, timeout, token, no_ve
             else:
                 console.print(result)
     except P1Error as e:
-        console.print(str(e), style="red")
+        console.print(str(e), style="red", markup=False)
         raise typer.Exit(code=e.code) from e
 
 
@@ -96,5 +96,5 @@ async def _users_delete_async(
             result = await c.delete(f"/api/user?name={quote(name)}")
             console.print(f"Deleted: {_dumps_json(result)}")
     except P1Error as e:
-        console.print(str(e), style="red")
+        console.print(str(e), style="red", markup=False)
         raise typer.Exit(code=e.code) from e

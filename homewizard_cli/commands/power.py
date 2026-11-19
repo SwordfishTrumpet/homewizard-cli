@@ -166,7 +166,7 @@ async def _power_async(
                 else:
                     data = await c.get_json("/api/v1/data", Measurement)
 
-                if store and serial:
+                if store:
                     store.append(data.model_dump(), serial)
 
                 if sparkline:

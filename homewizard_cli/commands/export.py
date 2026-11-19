@@ -19,7 +19,7 @@ from ..expr import evaluate_until, is_valid_expression
 from ..format import Format, get_format, write_data
 from ..models import Measurement
 from ..state import Aggregator, DeltaTracker
-from ..storage import _setup_store
+from ..storage import MeasurementStore, _setup_store
 from ..util import _dumps_json, _print_json
 
 app = typer.Typer()
@@ -255,6 +255,13 @@ async def _export_async(
     console = Console()
     host = resolve_host(host)
 
+    if retain_days is not None and retain_days < 1:
+        raise P1Error(
+            f"--retain-days must be at least 1 day (got {retain_days}): "
+            "refusing to prune history",
+            code=2,
+        )
+
     # Load config and resolve export-specific defaults
     cfg = load_config()
     export_cfg = cfg.export if cfg.export else None
@@ -411,6 +418,12 @@ async def _export_async(
     shutdown_event = asyncio.Event()
     _install_signal_handlers(shutdown_event)
 
+    # Declared before the try so the finally block can run every cleanup step
+    # even when _setup_store fails; referencing an unassigned name there masked
+    # the real database error with an UnboundLocalError and skipped the PID
+    # file removal (issue #21).
+    store: MeasurementStore | None = None
+
     try:
         async with client as c:
             store, serial = await _setup_store(db, api_version, c)
@@ -421,7 +434,7 @@ async def _export_async(
                         data = await c.get_json_v2("/api/measurement", Measurement)
                     else:
                         data = await c.get_json("/api/v1/data", Measurement)
-                    if store and serial:
+                    if store:
                         store.append(data.model_dump(), serial)
                         prune_counter += 1
                         if retain_days is not None and prune_counter % 60 == 0:

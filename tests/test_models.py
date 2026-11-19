@@ -154,3 +154,13 @@ def test_measurement_from_v2_dict():
     assert data.active_power_w == 500.0
     assert data.total_power_import_kwh == 100.0
     assert data.smr_version == 50
+
+
+def test_iso_to_compact_timestamp_rejects_non_timestamps():
+    """#48: only an ISO 8601 layout converts; a long digit string is not one."""
+    from homewizard_cli.util import _iso_to_compact_timestamp
+
+    assert _iso_to_compact_timestamp("000000000000000000") is None
+    assert _iso_to_compact_timestamp("2020-13-45T99:99:99") is None
+    assert _iso_to_compact_timestamp("250529120000") is None
+    assert _iso_to_compact_timestamp("2025-05-29T12:00:00+02:00") == 250529120000

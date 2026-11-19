@@ -83,7 +83,7 @@ async def _gas_async(
                     data = await c.get_json_v2("/api/measurement", Measurement)
                 else:
                     data = await c.get_json("/api/v1/data", Measurement)
-                if store and serial:
+                if store:
                     store.append(data.model_dump(), serial)
 
                 if full:

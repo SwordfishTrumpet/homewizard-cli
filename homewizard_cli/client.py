@@ -6,13 +6,39 @@ import os
 from typing import Type, TypeVar
 
 import httpx
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
-from .errors import HttpError, TimeoutError
+from .errors import (
+    DeviceNotFoundError,
+    HttpError,
+    ParseError,
+    TimeoutError,
+)
 
 _MAX_BACKOFF = 8.0
 
 T = TypeVar("T", bound=BaseModel)
+
+
+def _unreachable(host: str, request: str, error: Exception) -> DeviceNotFoundError:
+    """Wrap a transport failure so it names the meter and the request (exit 2)."""
+    return DeviceNotFoundError(
+        f"Cannot reach the P1 meter at {host}",
+        f"{request} failed: {error}. Check --host and that the meter is on the "
+        "network.",
+    )
+
+
+def parse_response(text: str, model: Type[T], request: str) -> T:
+    """Parse a device response into *model*, or raise ParseError (exit 5)."""
+    try:
+        return model.model_validate_json(text)
+    except ValidationError as e:
+        errors = e.errors()
+        first = errors[0].get("msg", str(e)) if errors else str(e)
+        raise ParseError(
+            f"Could not parse the response to {request}: {first}"
+        ) from e
 
 
 def _proxy_excluded(host: str) -> bool:
@@ -75,15 +101,20 @@ class P1Client:
         self._retries = 3
         self._backoff_base = 1.0
 
+    def _url(self, path: str) -> str:
+        """Absolute URL for *path*, so an error can name what it asked for."""
+        return str(self._client.base_url.join(path))
+
     async def get(self, path: str) -> str:
-        last_error: Exception = TimeoutError(self.timeout)
+        request = f"GET {self._url(path)}"
+        last_error: Exception = TimeoutError(self.timeout, request)
         for attempt in range(self._retries):
             try:
                 resp = await self._client.get(path)
                 resp.raise_for_status()
                 return resp.text
             except httpx.TimeoutException:
-                last_error = TimeoutError(self.timeout)
+                last_error = TimeoutError(self.timeout, request)
                 if attempt < self._retries - 1:
                     await asyncio.sleep(
                         min(self._backoff_base * (2**attempt), _MAX_BACKOFF)
@@ -96,40 +127,36 @@ class P1Client:
                     )
                     continue
                 raise HttpError(e.response.status_code, str(e.request.url)) from e
+            except httpx.RequestError as e:
+                raise _unreachable(self.host, request, e) from e
         raise last_error
 
     async def get_json(self, path: str, model: Type[T]) -> T:
         """GET request returning parsed Pydantic model."""
         text = await self.get(path)
-        return model.model_validate_json(text)
+        return parse_response(text, model, f"GET {self._url(path)}")
 
     async def get_json_v2(self, path: str, model: Type[T]) -> T:
         """Alias for get_json — same interface as P1ClientV2.get_json_v2."""
         return await self.get_json(path, model)
 
     async def put_json(self, path: str, data: dict) -> dict:
-        """PUT request with JSON body."""
-        last_error: Exception = TimeoutError(self.timeout)
-        for attempt in range(self._retries):
-            try:
-                resp = await self._client.put(path, json=data)
-                resp.raise_for_status()
-                return resp.json()
-            except httpx.TimeoutException:
-                last_error = TimeoutError(self.timeout)
-                if attempt < self._retries - 1:
-                    await asyncio.sleep(
-                        min(self._backoff_base * (2**attempt), _MAX_BACKOFF)
-                    )
-                    continue
-            except httpx.HTTPStatusError as e:
-                if e.response.status_code >= 500 and attempt < self._retries - 1:
-                    await asyncio.sleep(
-                        min(self._backoff_base * (2**attempt), _MAX_BACKOFF)
-                    )
-                    continue
-                raise HttpError(e.response.status_code, str(e.request.url)) from e
-        raise last_error
+        """PUT request with JSON body, sent exactly once.
+
+        A write is not idempotent: the device may apply it and then lose the
+        reply, so retrying would blink the LED or store the state twice.
+        """
+        request = f"PUT {self._url(path)}"
+        try:
+            resp = await self._client.put(path, json=data)
+            resp.raise_for_status()
+            return resp.json()
+        except httpx.TimeoutException as e:
+            raise TimeoutError(self.timeout, request) from e
+        except httpx.HTTPStatusError as e:
+            raise HttpError(e.response.status_code, str(e.request.url)) from e
+        except httpx.RequestError as e:
+            raise _unreachable(self.host, request, e) from e
 
     async def close(self):
         """Close the HTTP client."""

@@ -51,5 +51,5 @@ async def _pair_async(api_version, host: str | None, timeout, name, no_verify):
                 else:
                     raise
     except P1Error as e:
-        console.print(str(e), style="red")
+        console.print(str(e), style="red", markup=False)
         raise typer.Exit(code=e.code) from e

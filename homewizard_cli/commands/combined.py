@@ -85,7 +85,7 @@ async def _combined_async(
                 coros.append(asyncio.sleep(0))
 
             results = await asyncio.gather(*coros, return_exceptions=True)
-            if store and serial and not isinstance(results[1], Exception):
+            if store and not isinstance(results[1], Exception):
                 measurement = results[1]
                 if hasattr(measurement, "model_dump"):
                     store.append(measurement.model_dump(), serial)

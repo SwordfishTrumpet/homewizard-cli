@@ -1,12 +1,16 @@
 """Integration tests: export --db writes tagged rows."""
 
+import asyncio
 import contextlib
 import os
 import tempfile
 from unittest.mock import AsyncMock, patch
 
+import pytest
 from typer.testing import CliRunner
 
+from homewizard_cli.commands.export import _export_async
+from homewizard_cli.errors import P1Error
 from homewizard_cli.main import app
 from homewizard_cli.models import Measurement
 from homewizard_cli.models.v2 import DeviceInfoV2
@@ -132,3 +136,70 @@ def test_export_db_retain_days_runs():
     finally:
         with contextlib.suppress(OSError):
             os.unlink(db_path)
+
+
+def test_export_retain_days_rejects_non_positive():
+    """#16: --retain-days below 1 must be refused before anything is pruned."""
+    with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
+        db_path = f.name
+    try:
+        store = MeasurementStore(db_path)
+        store.append({"unique_id": "seed", "active_power_w": 1.0}, "SEED")
+        store.close()
+
+        for bad in ("-1", "0"):
+            with pytest.raises(P1Error) as excinfo:
+                asyncio.run(
+                    _export_async(
+                        format="json",
+                        watch=0.01,
+                        file=None,
+                        host="127.0.0.1",
+                        request_timeout=1.0,
+                        db=db_path,
+                        retain_days=int(bad),
+                    )
+                )
+            assert excinfo.value.code == 2
+            assert "retain-days" in str(excinfo.value)
+
+        store = MeasurementStore(db_path)
+        assert store.info()["row_count"] == 1
+        store.close()
+    finally:
+        with contextlib.suppress(OSError):
+            os.unlink(db_path)
+
+
+def test_export_db_startup_failure_reports_the_database_error(tmp_path):
+    """#21: a failing --db path must surface the sqlite error and clean up the PID file."""
+    pid_file = tmp_path / "export.pid"
+    db_path = tmp_path / "missing-dir" / "energy.db"
+
+    mock_client = AsyncMock()
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
+
+    with patch(
+        "homewizard_cli.commands.export.resolve_client", return_value=mock_client
+    ):
+        result = runner.invoke(
+            app,
+            [
+                "export",
+                "--host",
+                "127.0.0.1",
+                "--format",
+                "json",
+                "--db",
+                str(db_path),
+                "--pid-file",
+                str(pid_file),
+            ],
+        )
+
+    assert result.exit_code != 0
+    problem = f"{result.output}{result.exception!s}"
+    assert "local variable 'store'" not in problem
+    assert "unable to open database file" in problem
+    assert not pid_file.exists()

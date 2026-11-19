@@ -52,5 +52,5 @@ async def _batteries_async(api_version, host, timeout, token, no_verify, mode):
                 b = await c.get_json_v2("/api/batteries", BatteryState)
                 console.print(b.model_dump_json(indent=2))
     except P1Error as e:
-        console.print(str(e), style="red")
+        console.print(str(e), style="red", markup=False)
         raise typer.Exit(code=e.code) from e

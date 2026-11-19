@@ -1,6 +1,7 @@
 """SQLite-backed measurement storage for homewizard-cli."""
 
 import contextlib
+import logging
 import sqlite3
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -10,8 +11,16 @@ from typing import Any, Union, get_args, get_origin
 from .models import Measurement
 from .util import _dumps_json, _loads_json
 
+log = logging.getLogger(__name__)
 
-def _sql_type(annotation: type | None) -> str:
+
+def _sql_type(annotation: Any) -> str:
+    """SQL column type for a pydantic field annotation.
+
+    The annotation is whatever pydantic exposes (a bare type, a PEP 604 union,
+    or a type form under mypy), so it is narrowed here rather than at the call
+    site (issue #47).
+    """
     if annotation is None:
         return "TEXT"
     origin = get_origin(annotation)
@@ -49,6 +58,21 @@ _AGG_INTERVALS = {
     "weekly": "%Y-%W",
     "monthly": "%Y-%m",
 }
+
+
+def _device_serial(device_serial: str | None, data: dict) -> str:
+    """Identity to store with a reading.
+
+    The serial the device reports is the source of truth. When the device-info
+    call failed, the reading's own ``unique_id`` keeps the row attributable
+    instead of dropping it silently (issue #17).
+    """
+    if device_serial:
+        return device_serial
+    unique_id = data.get("unique_id")
+    if unique_id:
+        return str(unique_id)
+    return "unknown"
 
 
 def _parse_datetime(value: str | datetime | None) -> str | None:
@@ -111,14 +135,14 @@ class MeasurementStore:
         self._columns = [row[1] for row in cursor.fetchall()]
         return self._columns
 
-    def append(self, data: dict, device_serial: str) -> None:
+    def append(self, data: dict, device_serial: str | None) -> None:
         if self._conn is None:
             return
         now = datetime.now().isoformat()
         cols = self._get_columns()
         values: dict[str, Any] = {
             "stored_at": now,
-            "device_serial": device_serial,
+            "device_serial": _device_serial(device_serial, data),
             "schema_version": 1,
         }
         for col in cols:
@@ -325,8 +349,17 @@ class MeasurementStore:
         self._conn.execute("VACUUM")
 
     def retain(self, days: int) -> int:
+        """Delete rows older than *days* days and return how many went.
+
+        A non-positive *days* would put the cutoff in the future and delete the
+        whole table, so it is rejected instead of obeyed (issue #16).
+        """
         if self._conn is None:
             return 0
+        if days < 1:
+            raise ValueError(
+                f"retention must be at least 1 day, got {days}: refusing to prune history"
+            )
         self._commit_pending()
         cutoff = (datetime.now() - timedelta(days=days)).isoformat()
         cursor = self._conn.execute(
@@ -368,6 +401,11 @@ async def _setup_store(
     store = MeasurementStore(db)
     store.migrate()
     serial = await _fetch_device_serial(client, api_version)
+    if serial is None:
+        log.warning(
+            "device serial unavailable: storing readings under the meter's own "
+            "unique_id so --db history is not lost"
+        )
     return store, serial
 
 
