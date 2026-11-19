@@ -1,8 +1,11 @@
 """Config file handling for homewizard-cli."""
 
+import logging
 import tomllib
 from dataclasses import dataclass
 from pathlib import Path
+
+log = logging.getLogger(__name__)
 
 CONFIG_DIR = Path.home() / ".config" / "homewizard-cli"
 CONFIG_FILE = CONFIG_DIR / "config.toml"
@@ -66,6 +69,102 @@ class Config:
     no_verify: bool | None = None
     export: ExportConfig | None = None
     tariffs: TariffConfig | None = None
+    #: Set when config.toml exists but could not be parsed, so a command that
+    #: needed the file can report the typo instead of "no host configured".
+    parse_error: str | None = None
+
+
+def _string(
+    section: dict,
+    key: str,
+    section_name: str,
+    choices: set[str] | None = None,
+) -> str | None:
+    """Read a string entry, ignoring (and reporting) a value of another type."""
+    value = section.get(key)
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        log.warning(
+            "config.toml: [%s] %s must be a string; ignoring %r",
+            section_name,
+            key,
+            value,
+        )
+        return None
+    if choices is not None and value not in choices:
+        log.warning(
+            "config.toml: [%s] %s is not one of %s; ignoring %r",
+            section_name,
+            key,
+            ", ".join(sorted(choices)),
+            value,
+        )
+        return None
+    return value
+
+
+def _number(
+    section: dict,
+    key: str,
+    section_name: str,
+    default: float | None = None,
+) -> float | None:
+    """Read a numeric entry, ignoring (and reporting) a value of another type."""
+    value = section.get(key)
+    if value is None:
+        return default
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        log.warning(
+            "config.toml: [%s] %s must be a number; ignoring %r",
+            section_name,
+            key,
+            value,
+        )
+        return default
+    return float(value)
+
+
+def _integer(section: dict, key: str, section_name: str) -> int | None:
+    value = section.get(key)
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, int):
+        log.warning(
+            "config.toml: [%s] %s must be a whole number; ignoring %r",
+            section_name,
+            key,
+            value,
+        )
+        return None
+    return value
+
+
+def _rate(section: dict, key: str, section_name: str, default: float) -> float:
+    """Read a tariff rate, falling back to *default* when absent or unusable."""
+    value = _number(section, key, section_name)
+    return default if value is None else value
+
+
+def _boolean(section: dict, key: str, section_name: str) -> bool | None:
+    """Read a boolean entry, ignoring (and reporting) a value of another type.
+
+    A quoted "false" is not false: read as a string it is truthy, and a truthy
+    no_verify would switch TLS verification off on the value meant to keep it on
+    (issue #36). Only a real TOML boolean counts.
+    """
+    value = section.get(key)
+    if value is None:
+        return None
+    if not isinstance(value, bool):
+        log.warning(
+            "config.toml: [%s] %s must be true or false (unquoted); ignoring %r",
+            section_name,
+            key,
+            value,
+        )
+        return None
+    return value
 
 
 def _load_export_config(data: dict) -> ExportConfig | None:
@@ -74,18 +173,18 @@ def _load_export_config(data: dict) -> ExportConfig | None:
     if not export_data:
         return None
     return ExportConfig(
-        format=export_data.get("format"),
-        watch=export_data.get("watch"),
-        file=export_data.get("file"),
-        rotate=export_data.get("rotate"),
-        broker=export_data.get("broker"),
-        topic=export_data.get("topic"),
-        qos=export_data.get("qos"),
-        skip_unchanged=export_data.get("skip_unchanged"),
-        fields=export_data.get("fields"),
-        delta=export_data.get("delta"),
-        metrics_port=export_data.get("metrics_port"),
-        pid_file=export_data.get("pid_file"),
+        format=_string(export_data, "format", "export"),
+        watch=_number(export_data, "watch", "export"),
+        file=_string(export_data, "file", "export"),
+        rotate=_string(export_data, "rotate", "export"),
+        broker=_string(export_data, "broker", "export"),
+        topic=_string(export_data, "topic", "export"),
+        qos=_integer(export_data, "qos", "export"),
+        skip_unchanged=_boolean(export_data, "skip_unchanged", "export"),
+        fields=_string(export_data, "fields", "export"),
+        delta=_boolean(export_data, "delta", "export"),
+        metrics_port=_integer(export_data, "metrics_port", "export"),
+        pid_file=_string(export_data, "pid_file", "export"),
     )
 
 
@@ -95,12 +194,12 @@ def _load_tariff_config(data: dict) -> TariffConfig | None:
     if not tariff_data:
         return None
     return TariffConfig(
-        t1_rate=tariff_data.get("t1_rate", 0.30),
-        t2_rate=tariff_data.get("t2_rate", 0.20),
-        t3_rate=tariff_data.get("t3_rate", 0.25),
-        t4_rate=tariff_data.get("t4_rate", 0.15),
-        export_credit=tariff_data.get("export_credit", 0.10),
-        currency=tariff_data.get("currency", "EUR"),
+        t1_rate=_rate(tariff_data, "t1_rate", "tariffs", 0.30),
+        t2_rate=_rate(tariff_data, "t2_rate", "tariffs", 0.20),
+        t3_rate=_rate(tariff_data, "t3_rate", "tariffs", 0.25),
+        t4_rate=_rate(tariff_data, "t4_rate", "tariffs", 0.15),
+        export_credit=_rate(tariff_data, "export_credit", "tariffs", 0.10),
+        currency=_string(tariff_data, "currency", "tariffs") or "EUR",
     )
 
 
@@ -111,19 +210,24 @@ def load_config() -> Config:
 
     try:
         data = tomllib.loads(CONFIG_FILE.read_text())
-        default = data.get("default", {})
-        return Config(
-            host=default.get("host"),
-            timeout=default.get("timeout"),
-            format=default.get("format"),
-            timestamp_format=default.get("timestamp_format"),
-            token=default.get("token"),
-            no_verify=default.get("no_verify"),
-            export=_load_export_config(data),
-            tariffs=_load_tariff_config(data),
-        )
-    except (tomllib.TOMLDecodeError, FileNotFoundError):
+    except FileNotFoundError:
         return Config()
+    except tomllib.TOMLDecodeError as e:
+        # Swallowing the decode error discarded every configured default and
+        # sent the user back to edit the file that just failed to parse (#44).
+        return Config(parse_error=f"Invalid TOML in {CONFIG_FILE}: {e}")
+
+    default = data.get("default", {})
+    return Config(
+        host=_string(default, "host", "default"),
+        timeout=_number(default, "timeout", "default"),
+        format=_string(default, "format", "default", VALID_FORMATS),
+        timestamp_format=_string(default, "timestamp_format", "default"),
+        token=_string(default, "token", "default"),
+        no_verify=_boolean(default, "no_verify", "default"),
+        export=_load_export_config(data),
+        tariffs=_load_tariff_config(data),
+    )
 
 
 def validate_config() -> list[str]:
@@ -191,6 +295,11 @@ def resolve_host(host: str | None) -> str:
     if not resolved:
         from .errors import DeviceNotFoundError
 
+        if cfg.parse_error:
+            raise DeviceNotFoundError(
+                f"Could not read {CONFIG_FILE}",
+                f"{cfg.parse_error}. Fix that line, or pass --host <ip>.",
+            )
         raise DeviceNotFoundError(
             "No P1 meter host configured",
             "Use --host <ip>, set 'host' in config.toml ([default] section), "
@@ -216,4 +325,4 @@ def resolve_no_verify(no_verify: bool) -> bool:
     if no_verify:
         return True
     cfg = load_config()
-    return bool(cfg.no_verify)
+    return cfg.no_verify is True
