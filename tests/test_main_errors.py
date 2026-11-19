@@ -90,3 +90,18 @@ def test_global_options_alone_still_work():
         result = runner.invoke(app, ["--host", "192.168.1.1", "--format", "json"])
     assert result.exit_code == 0
     assert "500.0" in result.output
+
+
+def test_main_keeps_bracketed_error_text(capsys):
+    """#43: [default] is text the user must read, not Rich markup."""
+    import pytest
+
+    with patch("homewizard_cli.main.app") as mock_app:
+        mock_app.side_effect = P1Error(
+            "No P1 meter host configured",
+            details="set 'host' in config.toml ([default] section)",
+        )
+        with pytest.raises(SystemExit):
+            main()
+    captured = capsys.readouterr()
+    assert "[default]" in captured.err

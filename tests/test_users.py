@@ -157,3 +157,24 @@ def test_users_delete_url_encodes_name():
         # 'a b&c' must be percent-encoded, not raw
         assert "a%20b%26c" in instance.delete.call_args.args[0]
         assert "a b&c" not in instance.delete.call_args.args[0]
+
+
+def test_users_error_text_keeps_bracketed_details():
+    """#43: command handlers must not let Rich eat [default] from error text."""
+    from unittest.mock import AsyncMock, patch
+
+    from homewizard_cli.errors import P1Error
+
+    with patch("homewizard_cli.commands.users.P1ClientV2") as mock_cls:
+        instance = AsyncMock()
+        mock_cls.return_value = instance
+        instance.__aenter__ = AsyncMock(return_value=instance)
+        instance.__aexit__ = AsyncMock(return_value=False)
+        instance.get = AsyncMock(
+            side_effect=P1Error("cannot read users", details="see [default] section")
+        )
+
+        result = runner.invoke(app, ["users", "list", "--api-version", "v2", "--host", "1.2.3.4"])
+
+    assert result.exit_code != 0
+    assert "[default]" in result.output
